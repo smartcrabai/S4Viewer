@@ -1,32 +1,46 @@
-//
-//  S4_ViewerApp.swift
-//  S4 Viewer
-//
-//  Created by 森拓海 on 2026-04-21.
-//
-
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @main
 struct S4_ViewerApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    private let containerResult: Result<ModelContainer, Error>
 
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+    init() {
+        containerResult = Result {
+            let schema = Schema([ConnectionProfile.self])
+            let configuration = ModelConfiguration(
+                "S4Viewer",
+                schema: schema,
+                cloudKitDatabase: .automatic
+            )
+            return try ModelContainer(for: schema, configurations: [configuration])
         }
-    }()
+    }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            switch containerResult {
+            case let .success(container):
+                ContentView()
+                    .modelContainer(container)
+            case let .failure(error):
+                StartupFailureView(message: error.localizedDescription)
+            }
         }
-        .modelContainer(sharedModelContainer)
+        .defaultSize(width: 1400, height: 900)
+    }
+}
+
+private struct StartupFailureView: View {
+    let message: String
+
+    var body: some View {
+        ContentUnavailableView(
+            "Startup Failed",
+            systemImage: "exclamationmark.triangle.fill",
+            description: Text(message)
+        )
+        .frame(minWidth: 720, minHeight: 480)
+        .padding()
     }
 }
