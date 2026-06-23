@@ -1,5 +1,8 @@
 # S4 Viewer
 
+> [!WARNING]
+> This project is under active development. It is not ready for production use, and APIs, behavior, and project structure may change without notice.
+
 A native macOS browser for Amazon S3 and S3-compatible object stores. Built with SwiftUI and SwiftData, it implements AWS Signature V4 on top of `URLSession` and `CryptoKit` with no dependency on an external AWS SDK.
 
 ## Features
