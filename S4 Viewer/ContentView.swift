@@ -22,7 +22,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\ConnectionProfile.name)]) private var profiles: [ConnectionProfile]
 
-    @State private var browser = S3BrowserModel()
+    @State private var browser = S3BrowserModel.makeDefault()
     @State private var selectedProfileID: UUID?
     @State private var profileEditor: ProfileEditorSession?
     @State private var namePrompt: NamePromptSession?
@@ -159,11 +159,20 @@ struct ContentView: View {
         guard let selectedProfile else {
             return
         }
+        let credentials: S3Credentials?
+        do {
+            credentials = try ConnectionCredentialStore.shared.load(for: selectedProfile.id)
+        } catch ConnectionCredentialStoreError.missingCredentials {
+            credentials = nil
+        } catch {
+            browser.reportError(error.localizedDescription)
+            return
+        }
         profileEditor = ProfileEditorSession(
             title: "Edit Connection",
             actionTitle: "Save",
             existingProfileID: selectedProfile.id,
-            draft: ConnectionProfileDraft(profile: selectedProfile)
+            draft: ConnectionProfileDraft(profile: selectedProfile, credentials: credentials)
         )
     }
 
@@ -213,15 +222,26 @@ struct ContentView: View {
     }
 
     private func saveProfile(_ validated: ValidatedConnectionProfile, existingProfileID: UUID?) throws {
-        if let existingProfileID, let profile = profiles.first(where: { $0.id == existingProfileID }) {
-            profile.apply(validated)
-            selectedProfileID = profile.id
+        let profile: ConnectionProfile
+        if let existingProfileID, let existing = profiles.first(where: { $0.id == existingProfileID }) {
+            existing.apply(validated)
+            profile = existing
         } else {
-            let newProfile = ConnectionProfile(validated: validated)
-            modelContext.insert(newProfile)
-            selectedProfileID = newProfile.id
+            profile = ConnectionProfile(validated: validated)
+            modelContext.insert(profile)
         }
-        try modelContext.save()
+
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+
+        // Written only after the profile is committed, so a failed save never leaves
+        // a secret in the Keychain that no profile references.
+        try ConnectionCredentialStore.shared.save(validated.credentials, for: profile.id)
+        selectedProfileID = profile.id
     }
 
     private func deleteSelectedProfile() {
@@ -229,9 +249,11 @@ struct ContentView: View {
             return
         }
 
-        modelContext.delete(selectedProfile)
+        let profileID = selectedProfile.id
         do {
+            modelContext.delete(selectedProfile)
             try modelContext.save()
+            try ConnectionCredentialStore.shared.delete(for: profileID)
         } catch {
             browser.reportError(error.localizedDescription)
         }

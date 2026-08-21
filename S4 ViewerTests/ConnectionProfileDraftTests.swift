@@ -42,4 +42,47 @@ struct ConnectionProfileDraftTests {
             try draft.validated()
         }
     }
+
+    @Test
+    func draftFromProfileTakesCredentialsFromArgument() {
+        let profile = ConnectionProfile(
+            name: "Work",
+            endpoint: "https://s3.example.com",
+            region: "us-east-1",
+            bucket: "media",
+            usePathStyle: false
+        )
+
+        let draft = ConnectionProfileDraft(
+            profile: profile,
+            credentials: S3Credentials(accessKeyID: "ACCESS", secretAccessKey: "SECRET")
+        )
+
+        #expect(draft.name == "Work")
+        #expect(draft.endpoint == "https://s3.example.com")
+        #expect(draft.region == "us-east-1")
+        #expect(draft.bucket == "media")
+        #expect(draft.usePathStyle == false)
+        #expect(draft.accessKey == "ACCESS")
+        #expect(draft.secretKey == "SECRET")
+    }
+
+    @Test
+    func draftWithoutCredentialsLeavesKeysEmptyAndFailsValidation() {
+        let profile = ConnectionProfile(
+            name: "Work",
+            endpoint: "https://s3.example.com",
+            region: "us-east-1",
+            bucket: "media",
+            usePathStyle: true
+        )
+
+        let draft = ConnectionProfileDraft(profile: profile, credentials: nil)
+
+        #expect(draft.accessKey.isEmpty)
+        #expect(draft.secretKey.isEmpty)
+        #expect(throws: ConnectionProfileValidationError.missingAccessKey) {
+            try draft.validated()
+        }
+    }
 }

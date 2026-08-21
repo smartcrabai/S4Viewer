@@ -3,16 +3,14 @@ import SwiftData
 
 @Model
 final class ConnectionProfile {
-    var id: UUID
-    var name: String
-    var endpoint: String
-    var region: String
-    var bucket: String
-    var accessKey: String
-    var secretKey: String
-    var usePathStyle: Bool
-    var createdAt: Date
-    var updatedAt: Date
+    var id: UUID = UUID()
+    var name: String = ""
+    var endpoint: String = ""
+    var region: String = ""
+    var bucket: String = ""
+    var usePathStyle: Bool = true
+    var createdAt: Date = Date.now
+    var updatedAt: Date = Date.now
 
     init(
         id: UUID = UUID(),
@@ -20,8 +18,6 @@ final class ConnectionProfile {
         endpoint: String,
         region: String,
         bucket: String,
-        accessKey: String,
-        secretKey: String,
         usePathStyle: Bool,
         createdAt: Date = .now,
         updatedAt: Date = .now
@@ -31,8 +27,6 @@ final class ConnectionProfile {
         self.endpoint = endpoint
         self.region = region
         self.bucket = bucket
-        self.accessKey = accessKey
-        self.secretKey = secretKey
         self.usePathStyle = usePathStyle
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -44,8 +38,6 @@ final class ConnectionProfile {
             endpoint: validated.endpointURL.absoluteString,
             region: validated.region,
             bucket: validated.bucket,
-            accessKey: validated.accessKey,
-            secretKey: validated.secretKey,
             usePathStyle: validated.usePathStyle
         )
     }
@@ -55,13 +47,13 @@ final class ConnectionProfile {
         endpoint = validated.endpointURL.absoluteString
         region = validated.region
         bucket = validated.bucket
-        accessKey = validated.accessKey
-        secretKey = validated.secretKey
         usePathStyle = validated.usePathStyle
         updatedAt = now
     }
 
-    func configuration() throws -> S3ConnectionConfiguration {
-        try ConnectionProfileDraft(profile: self).validated().configuration
+    func configuration(credentials: S3Credentials) throws -> S3ConnectionConfiguration {
+        return try ConnectionProfileDraft(profile: self, credentials: credentials)
+            .validated()
+            .configuration
     }
 }

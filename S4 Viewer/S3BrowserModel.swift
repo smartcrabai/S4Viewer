@@ -57,17 +57,35 @@ final class S3BrowserModel {
     private var currentPreviewURL: URL?
     @ObservationIgnored
     private var previewRequestID = UUID()
+    @ObservationIgnored
+    private let credentialProvider: @Sendable (UUID) throws -> S3Credentials
 
     init(
         clientFactory: @escaping @Sendable (S3ConnectionConfiguration) -> any S3ClientProtocol = {
             S3HTTPClient(configuration: $0)
         },
+        credentialProvider: @escaping @Sendable (UUID) throws -> S3Credentials = {
+            try ConnectionCredentialStore.shared.load(for: $0)
+        },
         previewDirectory: URL = FileManager.default.temporaryDirectory.appendingPathComponent("S4ViewerPreviewCache", isDirectory: true),
         fileManager: FileManager = .default
     ) {
         self.clientFactory = clientFactory
+        self.credentialProvider = credentialProvider
         self.previewDirectory = previewDirectory
         self.fileManager = fileManager
+    }
+
+    static func makeDefault() -> S3BrowserModel {
+#if DEBUG
+        if DemoMode.isEnabled {
+            return S3BrowserModel(
+                clientFactory: { _ in DemoS3Client() },
+                credentialProvider: { _ in DemoMode.credentials }
+            )
+        }
+#endif
+        return S3BrowserModel()
     }
 
     var filteredItems: [S3BrowserItem] {
@@ -355,7 +373,7 @@ final class S3BrowserModel {
     }
 
     private func makeClient(for profile: ConnectionProfile) throws -> any S3ClientProtocol {
-        clientFactory(try profile.configuration())
+        clientFactory(try profile.configuration(credentials: credentialProvider(profile.id)))
     }
 
     private func resetBrowser() {

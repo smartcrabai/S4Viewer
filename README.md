@@ -1,13 +1,10 @@
 # S4 Viewer
 
-> [!WARNING]
-> This project is under active development. It is not ready for production use, and APIs, behavior, and project structure may change without notice.
-
 A native macOS browser for Amazon S3 and S3-compatible object stores. Built with SwiftUI and SwiftData, it implements AWS Signature V4 on top of `URLSession` and `CryptoKit` with no dependency on an external AWS SDK.
 
 ## Features
 
-- **Connection profiles** — Store multiple S3 / S3-compatible endpoints (AWS S3, MinIO, Cloudflare R2, Backblaze B2, and so on) in SwiftData. Both path-style and virtual-hosted-style addressing are supported.
+- **Connection profiles** — Sync S3 / S3-compatible endpoint metadata with SwiftData and CloudKit while keeping access keys and secret keys in iCloud Keychain. Both path-style and virtual-hosted-style addressing are supported.
 - **Object browsing** — Folders pinned on top, sort by name / size / modification date / kind, and incremental filtering.
 - **Upload / download** — Files larger than 8 MiB automatically switch to multipart transfers. Multi-file uploads run up to three in parallel.
 - **Preview** — Inline rendering for text-like objects, Quick Look for everything else.
@@ -33,7 +30,7 @@ xcodebuild -project "S4 Viewer.xcodeproj" \
            build
 ```
 
-The app is built with App Sandbox and Hardened Runtime enabled. The user-selected read-write entitlement (`com.apple.security.files.user-selected.read-write`) is used for upload and download.
+The app is built with App Sandbox and Hardened Runtime enabled. The user-selected read-write entitlement (`com.apple.security.files.user-selected.read-write`) is used for upload and download. S3 credentials are stored as synchronizable data-protection Keychain items rather than in the SwiftData store.
 
 ## Tests
 
@@ -54,13 +51,14 @@ Primary test targets:
 | `S3ListObjectsResponseParserTests.swift` | `ListObjectsV2` XML parsing |
 | `MultipartTransferPlannerTests.swift` | Multipart part planning |
 | `ConnectionProfileDraftTests.swift` | Connection input validation |
+| `ConnectionCredentialStoreTests.swift` | Keychain credential storage lifecycle |
 | `S3BrowserCoreTests.swift` | Sorting, filtering, preview-kind detection |
 
 ## Architecture
 
 | Layer | Key files |
 |---|---|
-| Persistence | `ConnectionProfile.swift` (SwiftData `@Model`) |
+| Persistence | `ConnectionProfile.swift` (SwiftData `@Model`), `ConnectionCredentialStore.swift` (iCloud Keychain) |
 | Input / validation | `ConnectionProfileDraft.swift`, `S3ConnectionConfiguration.swift` |
 | Networking | `S3HTTPClient.swift`, `S3RequestSigner.swift` |
 | Domain model | `S3BrowserModel.swift`, `S3BrowserItem.swift`, `MultipartTransferPlanner.swift`, `ObjectPreviewKind.swift` |
