@@ -64,27 +64,16 @@ nonisolated struct S3ListObjectsResponseParser {
         guard let value else {
             return nil
         }
-        return ISO8601DateFormatter.withFractionalSeconds.date(from: value)
-            ?? ISO8601DateFormatter.standardInternet.date(from: value)
+        if let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(value) {
+            return date
+        }
+        return try? Date.ISO8601FormatStyle().parse(value)
     }
 }
 
 private extension XMLElement {
-    func firstValue(for name: String) -> String? {
+    nonisolated func firstValue(for name: String) -> String? {
         elements(forName: name).first?.stringValue
     }
 }
 
-private extension ISO8601DateFormatter {
-    static let withFractionalSeconds: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    static let standardInternet: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-}

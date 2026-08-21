@@ -45,4 +45,40 @@ struct S3ListObjectsResponseParserTests {
         #expect(page.items.first?.kind == .folder)
         #expect(page.items.last?.name == "notes space.txt")
     }
+
+    @Test
+    func parserReadsFractionalAndPlainTimestamps() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <ListBucketResult>
+            <Name>examplebucket</Name>
+            <Prefix></Prefix>
+            <IsTruncated>false</IsTruncated>
+            <Contents>
+                <Key>fractional.txt</Key>
+                <LastModified>2026-04-20T11:00:00.250Z</LastModified>
+                <Size>1</Size>
+            </Contents>
+            <Contents>
+                <Key>plain.txt</Key>
+                <LastModified>2026-04-20T12:30:45Z</LastModified>
+                <Size>2</Size>
+            </Contents>
+            <Contents>
+                <Key>broken.txt</Key>
+                <LastModified>not a date</LastModified>
+                <Size>3</Size>
+            </Contents>
+        </ListBucketResult>
+        """
+
+        let page = try S3ListObjectsResponseParser().parse(data: Data(xml.utf8), prefix: "")
+        let dates = Dictionary(
+            uniqueKeysWithValues: page.items.map { ($0.key, $0.modifiedAt) }
+        )
+
+        #expect(dates["fractional.txt"] == Date(timeIntervalSince1970: 1_776_682_800.25))
+        #expect(dates["plain.txt"] == Date(timeIntervalSince1970: 1_776_688_245))
+        #expect(dates["broken.txt"] == .some(nil))
+    }
 }

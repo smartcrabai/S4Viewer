@@ -35,16 +35,17 @@ nonisolated struct ValidatedConnectionProfile: Equatable, Sendable {
     let secretKey: String
     let usePathStyle: Bool
 
+    var credentials: S3Credentials {
+        S3Credentials(accessKeyID: accessKey, secretAccessKey: secretKey)
+    }
+
     var configuration: S3ConnectionConfiguration {
         S3ConnectionConfiguration(
             name: name,
             endpointURL: endpointURL,
             region: region,
             bucket: bucket,
-            credentials: S3Credentials(
-                accessKeyID: accessKey,
-                secretAccessKey: secretKey
-            ),
+            credentials: credentials,
             usePathStyle: usePathStyle
         )
     }
@@ -79,13 +80,13 @@ nonisolated struct ConnectionProfileDraft: Equatable, Sendable {
         self.usePathStyle = usePathStyle
     }
 
-    init(profile: ConnectionProfile) {
+    init(profile: ConnectionProfile, credentials: S3Credentials?) {
         name = profile.name
         endpoint = profile.endpoint
         region = profile.region
         bucket = profile.bucket
-        accessKey = profile.accessKey
-        secretKey = profile.secretKey
+        accessKey = credentials?.accessKeyID ?? ""
+        secretKey = credentials?.secretAccessKey ?? ""
         usePathStyle = profile.usePathStyle
     }
 

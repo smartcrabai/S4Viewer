@@ -1,3 +1,4 @@
+import OSLog
 import SwiftData
 import SwiftUI
 
@@ -8,12 +9,21 @@ struct S4_ViewerApp: App {
     init() {
         containerResult = Result {
             let schema = Schema([ConnectionProfile.self])
+#if DEBUG
+            if DemoMode.isEnabled {
+                return try DemoMode.makeContainer(schema: schema)
+            }
+#endif
             let configuration = ModelConfiguration(
                 "S4Viewer",
                 schema: schema,
                 cloudKitDatabase: .automatic
             )
             return try ModelContainer(for: schema, configurations: [configuration])
+        }
+        if case let .failure(error) = containerResult {
+            Logger(subsystem: "ai.smartcrab.s4viewer", category: "startup")
+                .error("Startup failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -30,6 +40,7 @@ struct S4_ViewerApp: App {
         .defaultSize(width: 1400, height: 900)
     }
 }
+
 
 private struct StartupFailureView: View {
     let message: String

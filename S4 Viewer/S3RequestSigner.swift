@@ -153,7 +153,7 @@ nonisolated struct S3RequestSigner {
 }
 
 private extension URL {
-    var hostWithPort: String {
+    nonisolated var hostWithPort: String {
         if let port, let host {
             return "\(host):\(port)"
         }

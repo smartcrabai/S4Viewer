@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct S3Credentials: Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
+nonisolated struct S3Credentials: Codable, Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
     let accessKeyID: String
     let secretAccessKey: String
 
