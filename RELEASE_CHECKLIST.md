@@ -1,4 +1,4 @@
-# Release Checklist — 1.0 (Mac App Store)
+# Release Checklist - 1.0 (Mac App Store)
 
 Tracks what is left before the first submission. Everything not listed under
 "Remaining" is already done: App ID capabilities (App Sandbox, iCloud/CloudKit,
@@ -16,6 +16,10 @@ None of this has been exercised with real credentials yet. Run it on the
 signed build, not a `CODE_SIGNING_ALLOWED=NO` one, because the Keychain
 refuses to store items without the app's entitlements.
 
+The `AllTests` test plan already covers these flows against `DemoBucket`, so the
+point of repeating them here is the real endpoint, real Keychain, and real
+iCloud - not the UI wiring:
+
 - [ ] Create a connection profile and confirm it appears in the sidebar
 - [ ] List objects, enter a folder, navigate back up
 - [ ] Sort by name / size / modification date / kind, and filter
@@ -23,12 +27,15 @@ refuses to store items without the app's entitlements.
 - [ ] Preview a binary object through Quick Look
 - [ ] Download an object; confirm the transfer row appears and clears
 - [ ] Upload a file smaller than 8 MiB
-- [ ] Upload a file larger than 8 MiB (exercises the multipart path)
-- [ ] Upload several files at once (three run in parallel)
 - [ ] Create a folder, rename an object, rename a folder, delete both
+- [ ] Edit the profile; confirm the access key and secret key are pre-filled
+
+Not covered by any automated test, because no fixture can stand in for them:
+
+- [ ] Upload a file larger than 8 MiB (exercises the multipart path)
+- [ ] Upload several files at once (three run in parallel) at real throughput
 - [ ] Quit and relaunch; confirm the profile still connects, which proves the
       credentials were read back from the Keychain
-- [ ] Edit the profile; confirm the access key and secret key are pre-filled
 - [ ] Delete the profile; confirm its Keychain item is gone (Keychain Access,
       service `ai.smartcrab.s4viewer.s3-credentials`)
 - [ ] Enter a wrong secret key and confirm the error is shown, not swallowed
@@ -58,6 +65,8 @@ refuses to store items without the app's entitlements.
 ## Notes
 
 - Screenshots can be regenerated without touching a real bucket by launching a
-  Debug build with `-S4ViewerDemoData`, which seeds an in-memory profile and a
-  stub S3 client. The flag is compiled out of Release builds.
+  Debug build with `-S4ViewerDemoData`, which seeds an in-memory profile and the
+  `DemoBucket` fixtures. The flag is compiled out of Release builds, and
+  `S4_ViewerUITestsLaunchTests` attaches the same screenshot on every run of the
+  `AllTests` plan.
 - Uploaded screenshots are 2880 x 1800, sRGB, with no alpha channel.

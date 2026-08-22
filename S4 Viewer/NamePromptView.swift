@@ -37,6 +37,7 @@ struct NamePromptView: View {
                 .onSubmit {
                     submit()
                 }
+                .accessibilityIdentifier(A11y.NamePrompt.field)
 
             if let errorMessage {
                 Text(errorMessage)
@@ -54,6 +55,7 @@ struct NamePromptView: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(isSubmitting)
+                .accessibilityIdentifier(A11y.NamePrompt.submit)
             }
         }
         .padding(20)
