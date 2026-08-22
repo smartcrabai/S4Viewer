@@ -1,33 +1,22 @@
-//
-//  S4_ViewerUITestsLaunchTests.swift
-//  S4 ViewerUITests
-//
-//  Created by 森拓海 on 2026-04-21.
-//
-
 import XCTest
 
+/// Captures the App Store screenshot from the demo fixtures. Keeping it in the suite means
+/// a launch regression fails CI instead of surfacing at screenshot time.
 final class S4_ViewerUITestsLaunchTests: XCTestCase {
-
-    override class var runsForEachTargetApplicationUIConfiguration: Bool {
-        true
-    }
-
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
 
     @MainActor
-    func testLaunch() throws {
-        let app = XCUIApplication()
-        app.launch()
+    func testLaunchRendersPopulatedWindow() throws {
+        let screen = Screen.launch()
 
-        // Insert steps here to perform after app launch but before taking a screenshot,
-        // such as logging into a test account or navigating somewhere in the app
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
+        screen.select("release-notes.md")
+        XCTAssertTrue(screen.previewInlineText.waitForExistence(timeout: 15))
+        XCTAssertEqual(screen.rowKeys, Fixture.root)
+        XCTAssertTrue(screen.profileRow(Fixture.profileName).exists)
 
-        let attachment = XCTAttachment(screenshot: app.screenshot())
+        let attachment = XCTAttachment(screenshot: screen.app.screenshot())
         attachment.name = "Launch Screen"
         attachment.lifetime = .keepAlways
         add(attachment)

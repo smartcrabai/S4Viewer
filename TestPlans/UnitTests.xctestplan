@@ -1,0 +1,29 @@
+{
+  "configurations" : [
+    {
+      "id" : "8D3B1F42-6F3C-4C21-9A2E-1B47C0A51001",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:S4 Viewer.xcodeproj",
+      "identifier" : "E163547B2F97A7CF00E5E267",
+      "name" : "S4 Viewer"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:S4 Viewer.xcodeproj",
+        "identifier" : "E163548A2F97A7D200E5E267",
+        "name" : "S4 ViewerTests"
+      }
+    }
+  ],
+  "version" : 1
+}

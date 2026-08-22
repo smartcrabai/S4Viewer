@@ -47,7 +47,7 @@ struct ContentView: View {
             BrowserColumnView(
                 browser: browser,
                 profile: selectedProfile,
-                onUpload: { isShowingUploadImporter = true },
+                onUpload: beginUpload,
                 onDownload: beginDownload,
                 onCreateFolder: openCreateFolderPrompt,
                 onRename: openRenamePrompt,
@@ -102,6 +102,7 @@ struct ContentView: View {
             titleVisibility: .visible
         ) {
             Button("Delete", role: .destructive, action: deleteSelectedProfile)
+                .accessibilityIdentifier(A11y.Confirm.deleteProfile)
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("The selected connection profile will be removed from the app.")
@@ -119,6 +120,7 @@ struct ContentView: View {
                     await browser.deleteSelection(using: selectedProfile)
                 }
             }
+            .accessibilityIdentifier(A11y.Confirm.deleteItem)
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("The selected S3 item will be deleted.")
@@ -135,15 +137,30 @@ struct ContentView: View {
             )
         ) {
             Button("OK", role: .cancel) {}
+                .accessibilityIdentifier(A11y.ErrorAlert.dismiss)
         } message: {
             Text(browser.errorMessage ?? "")
+                .accessibilityIdentifier(A11y.ErrorAlert.message)
         }
         .onChange(of: profiles.map(\.id), initial: true) { _, ids in
             synchronizeProfileSelection(with: ids)
         }
         .task(id: selectedProfile?.id) {
+#if DEBUG
+            if DemoMode.isEnabled {
+                // Publish before connecting so testing-only intents drive this live model.
+                DemoAutomationContext.shared.attach(browser: browser, profile: selectedProfile)
+            }
+#endif
             await browser.connect(to: selectedProfile)
         }
+#if DEBUG
+        .onDisappear {
+            if DemoMode.isEnabled {
+                DemoAutomationContext.shared.detach(browser: browser)
+            }
+        }
+#endif
     }
 
     private func openCreateProfile() {
@@ -202,6 +219,29 @@ struct ContentView: View {
         ) { value in
             await browser.renameSelection(to: value, using: selectedProfile)
         }
+    }
+
+    @MainActor
+    private func beginUpload() {
+#if DEBUG
+        // Demo mode uploads fixtures instead of opening the importer, which a UI test
+        // cannot drive.
+        if DemoMode.isEnabled {
+            guard let selectedProfile else {
+                return
+            }
+            Task {
+                do {
+                    let urls = try DemoMode.makeUploadFixtures()
+                    await browser.uploadFiles(urls, using: selectedProfile)
+                } catch {
+                    browser.reportError(error.localizedDescription)
+                }
+            }
+            return
+        }
+#endif
+        isShowingUploadImporter = true
     }
 
     @MainActor
@@ -306,17 +346,33 @@ private struct ConnectionSidebarView: View {
                         systemImage: "externaldrive",
                         description: Text("Add an S3 or S3-compatible connection to begin browsing.")
                     )
+                    .accessibilityIdentifier(A11y.Sidebar.empty)
                 }
             }
 
             Divider()
 
             HStack {
-                IconToolbarButton(title: "Add", systemImage: "plus", action: onAddProfile)
-                IconToolbarButton(title: "Edit", systemImage: "pencil", action: onEditProfile)
-                    .disabled(selectedProfileID == nil)
-                IconToolbarButton(title: "Delete", systemImage: "trash", action: onDeleteProfile)
-                    .disabled(selectedProfileID == nil)
+                IconToolbarButton(
+                    title: "Add",
+                    systemImage: "plus",
+                    identifier: A11y.Sidebar.add,
+                    action: onAddProfile
+                )
+                IconToolbarButton(
+                    title: "Edit",
+                    systemImage: "pencil",
+                    identifier: A11y.Sidebar.edit,
+                    action: onEditProfile
+                )
+                .disabled(selectedProfileID == nil)
+                IconToolbarButton(
+                    title: "Delete",
+                    systemImage: "trash",
+                    identifier: A11y.Sidebar.delete,
+                    action: onDeleteProfile
+                )
+                .disabled(selectedProfileID == nil)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
@@ -331,10 +387,11 @@ private struct ConnectionSidebarRow: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(profile.name)
                 .font(.headline)
-            Text("\(profile.bucket) · \(profile.region)")
+            Text("\(profile.bucket) / \(profile.region)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .accessibilityIdentifier(A11y.Sidebar.row(profile.name))
         .padding(.vertical, 4)
     }
 }
@@ -389,12 +446,14 @@ private struct BrowserColumnView: View {
                                 systemImage: "magnifyingglass",
                                 description: Text("No items match \"\(browser.filterText)\" in this location.")
                             )
+                            .accessibilityIdentifier(A11y.Browser.emptyMatches)
                         } else {
                             ContentUnavailableView(
                                 "No Objects",
                                 systemImage: "tray",
                                 description: Text("Upload files or create folders in the current location.")
                             )
+                            .accessibilityIdentifier(A11y.Browser.emptyObjects)
                         }
                     } else {
                         BrowserTableView(browser: browser, profile: profile)
@@ -413,6 +472,7 @@ private struct BrowserColumnView: View {
                 systemImage: "externaldrive.badge.icloud",
                 description: Text("Choose a saved connection profile to browse an S3 bucket.")
             )
+            .accessibilityIdentifier(A11y.Browser.noConnection)
         }
     }
 }
@@ -439,23 +499,64 @@ private struct BrowserActionBar: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
+                .accessibilityIdentifier(A11y.Browser.locationTitle)
 
             HStack(spacing: 8) {
                 HStack(spacing: 8) {
-                    IconToolbarButton(title: "Refresh", systemImage: "arrow.clockwise", action: onRefresh)
-                    IconToolbarButton(title: "Open", systemImage: "arrow.right.circle", action: onOpen)
-                        .disabled(selectedItem?.kind != .folder)
-                    IconToolbarButton(title: "Up", systemImage: "arrow.up", action: onUp)
-                        .disabled(!browser.canNavigateUp)
+                    IconToolbarButton(
+                        title: "Refresh",
+                        systemImage: "arrow.clockwise",
+                        identifier: A11y.Browser.refresh,
+                        action: onRefresh
+                    )
+                    IconToolbarButton(
+                        title: "Open",
+                        systemImage: "arrow.right.circle",
+                        identifier: A11y.Browser.open,
+                        action: onOpen
+                    )
+                    .disabled(selectedItem?.kind != .folder)
+                    IconToolbarButton(
+                        title: "Up",
+                        systemImage: "arrow.up",
+                        identifier: A11y.Browser.up,
+                        action: onUp
+                    )
+                    .disabled(!browser.canNavigateUp)
                     Divider().frame(height: 20)
-                    IconToolbarButton(title: "Upload", systemImage: "square.and.arrow.up", action: onUpload)
-                    IconToolbarButton(title: "Download", systemImage: "square.and.arrow.down", action: onDownload)
-                        .disabled(selectedItem?.kind != .object)
-                    IconToolbarButton(title: "New Folder", systemImage: "folder.badge.plus", action: onCreateFolder)
-                    IconToolbarButton(title: "Rename", systemImage: "pencil", action: onRename)
-                        .disabled(selectedItem == nil)
-                    IconToolbarButton(title: "Delete", systemImage: "trash", action: onDelete)
-                        .disabled(selectedItem == nil)
+                    IconToolbarButton(
+                        title: "Upload",
+                        systemImage: "square.and.arrow.up",
+                        identifier: A11y.Browser.upload,
+                        action: onUpload
+                    )
+                    IconToolbarButton(
+                        title: "Download",
+                        systemImage: "square.and.arrow.down",
+                        identifier: A11y.Browser.download,
+                        action: onDownload
+                    )
+                    .disabled(selectedItem?.kind != .object)
+                    IconToolbarButton(
+                        title: "New Folder",
+                        systemImage: "folder.badge.plus",
+                        identifier: A11y.Browser.newFolder,
+                        action: onCreateFolder
+                    )
+                    IconToolbarButton(
+                        title: "Rename",
+                        systemImage: "pencil",
+                        identifier: A11y.Browser.rename,
+                        action: onRename
+                    )
+                    .disabled(selectedItem == nil)
+                    IconToolbarButton(
+                        title: "Delete",
+                        systemImage: "trash",
+                        identifier: A11y.Browser.delete,
+                        action: onDelete
+                    )
+                    .disabled(selectedItem == nil)
                 }
                 .fixedSize()
                 Spacer(minLength: 8)
@@ -467,6 +568,7 @@ private struct BrowserActionBar: View {
                 }
                 .pickerStyle(.menu)
                 .frame(width: 180)
+                .accessibilityIdentifier(A11y.Browser.sortPicker)
             }
         }
         .padding(.horizontal, 12)
@@ -483,19 +585,21 @@ private struct BrowserTableView: View {
         Table(browser.sortedItems, selection: selectionBinding) {
             TableColumn("Name") { item in
                 Label(item.name, systemImage: item.kind.systemImageName)
+                    .accessibilityIdentifier(A11y.Browser.row(item.key))
             }
             TableColumn("Kind") { item in
                 Text(item.kind.label)
                     .foregroundStyle(.secondary)
             }
             TableColumn("Size") { item in
-                Text(item.size.map(ItemFormatter.size) ?? "—")
+                Text(item.size.map(ItemFormatter.size) ?? "-")
                     .monospacedDigit()
             }
             TableColumn("Modified") { item in
-                Text(item.modifiedAt.map(ItemFormatter.date) ?? "—")
+                Text(item.modifiedAt.map(ItemFormatter.date) ?? "-")
             }
         }
+        .accessibilityIdentifier(A11y.Browser.table)
         .tableStyle(.bordered(alternatesRowBackgrounds: true))
         .contextMenu(forSelectionType: S3BrowserItem.ID.self) { _ in
         } primaryAction: { selection in
@@ -539,18 +643,21 @@ private struct PreviewColumnView: View {
                 systemImage: "eye.slash",
                 description: Text(message)
             )
+            .accessibilityIdentifier(A11y.Preview.empty)
         case .loading:
             VStack {
                 Spacer()
                 ProgressView("Loading preview...")
                 Spacer()
             }
+            .accessibilityIdentifier(A11y.Preview.loading)
         case let .failed(message):
             ContentUnavailableView(
                 "Preview Failed",
                 systemImage: "exclamationmark.triangle",
                 description: Text(message)
             )
+            .accessibilityIdentifier(A11y.Preview.failed)
         case let .ready(preview):
             PreviewContentView(preview: preview)
         }
@@ -570,9 +677,11 @@ private struct PreviewContentView: View {
                         .font(.body.monospaced())
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier(A11y.Preview.inlineText)
                 case .quickLook:
                     QuickLookPreviewView(url: preview.localURL)
                         .frame(minHeight: 420)
+                        .accessibilityIdentifier(A11y.Preview.quickLook)
                 case .unsupported:
                     Text("Preview is not available for this file type.")
                 }
@@ -585,9 +694,11 @@ private struct PreviewContentView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(preview.item.name)
                 .font(.title2.weight(.semibold))
+                .accessibilityIdentifier(A11y.Preview.name)
             Text(preview.item.key)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
+                .accessibilityIdentifier(A11y.Preview.key)
             HStack {
                 Text(preview.item.kind.label)
                 if let size = preview.item.size {
@@ -616,6 +727,7 @@ private struct FilterField: View {
                 .textFieldStyle(.plain)
                 .focused($isFocused)
                 .frame(minWidth: 120, maxWidth: 180)
+                .accessibilityIdentifier(A11y.Browser.filterField)
             if !text.isEmpty {
                 Button {
                     text = ""
@@ -626,6 +738,7 @@ private struct FilterField: View {
                 }
                 .buttonStyle(.plain)
                 .help("Clear filter")
+                .accessibilityIdentifier(A11y.Browser.filterClear)
             }
         }
         .padding(.horizontal, 8)
@@ -644,12 +757,14 @@ private struct FilterField: View {
 private struct IconToolbarButton: View {
     let title: String
     let systemImage: String
+    let identifier: String
     let action: () -> Void
 
     var body: some View {
         Button(title, systemImage: systemImage, action: action)
             .labelStyle(.iconOnly)
             .help(title)
+            .accessibilityIdentifier(identifier)
     }
 }
 
@@ -672,6 +787,7 @@ private struct TransferListView: View {
                     Text(transfer.message ?? transfer.status.rawValue.capitalized)
                         .font(.caption)
                         .foregroundStyle(transfer.status == .failed ? .red : .secondary)
+                        .accessibilityIdentifier(A11y.Transfers.status(transfer.name))
                 }
             }
         }

@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import Synchronization
 
 nonisolated enum ConnectionCredentialStoreError: LocalizedError, Equatable {
     case missingCredentials
@@ -20,23 +21,46 @@ nonisolated enum ConnectionCredentialStoreError: LocalizedError, Equatable {
 }
 
 nonisolated struct ConnectionCredentialStore: Sendable {
-    static let shared = ConnectionCredentialStore(
-        service: "ai.smartcrab.s4viewer.s3-credentials",
-        synchronizes: true,
-        usesDataProtectionKeychain: true
-    )
+    static let shared: ConnectionCredentialStore = {
+#if DEBUG
+        // Demo mode keeps credentials in memory so UI tests never touch the login
+        // Keychain, which an unsigned test build cannot write to anyway.
+        if DemoMode.isEnabled {
+            return ConnectionCredentialStore(inMemoryStorage: InMemoryCredentialStorage())
+        }
+#endif
+        return ConnectionCredentialStore(
+            service: "ai.smartcrab.s4viewer.s3-credentials",
+            synchronizes: true,
+            usesDataProtectionKeychain: true
+        )
+    }()
 
     private let service: String
     private let synchronizes: Bool
     private let usesDataProtectionKeychain: Bool
+    private let inMemoryStorage: InMemoryCredentialStorage?
 
     init(service: String, synchronizes: Bool, usesDataProtectionKeychain: Bool) {
         self.service = service
         self.synchronizes = synchronizes
         self.usesDataProtectionKeychain = usesDataProtectionKeychain
+        self.inMemoryStorage = nil
+    }
+
+    private init(inMemoryStorage: InMemoryCredentialStorage) {
+        self.service = ""
+        self.synchronizes = false
+        self.usesDataProtectionKeychain = false
+        self.inMemoryStorage = inMemoryStorage
     }
 
     func save(_ credentials: S3Credentials, for profileID: UUID) throws {
+        if let inMemoryStorage {
+            inMemoryStorage.save(credentials, for: profileID)
+            return
+        }
+
         let data = try JSONEncoder().encode(credentials)
         let query = itemQuery(for: profileID)
         let updateStatus = SecItemUpdate(
@@ -63,6 +87,13 @@ nonisolated struct ConnectionCredentialStore: Sendable {
     }
 
     func load(for profileID: UUID) throws -> S3Credentials {
+        if let inMemoryStorage {
+            guard let stored = inMemoryStorage.load(for: profileID) else {
+                throw ConnectionCredentialStoreError.missingCredentials
+            }
+            return stored
+        }
+
         var query = itemQuery(for: profileID)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -86,6 +117,11 @@ nonisolated struct ConnectionCredentialStore: Sendable {
     }
 
     func delete(for profileID: UUID) throws {
+        if let inMemoryStorage {
+            inMemoryStorage.delete(for: profileID)
+            return
+        }
+
         let status = SecItemDelete(itemQuery(for: profileID) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw ConnectionCredentialStoreError.keychain(status)
@@ -103,5 +139,23 @@ nonisolated struct ConnectionCredentialStore: Sendable {
             query[kSecUseDataProtectionKeychain as String] = true
         }
         return query
+    }
+}
+
+/// Backing used by demo mode instead of the Keychain. A reference type so the value-type
+/// store keeps sharing one dictionary across copies.
+nonisolated final class InMemoryCredentialStorage: Sendable {
+    private let entries = Mutex<[UUID: S3Credentials]>([:])
+
+    func save(_ credentials: S3Credentials, for profileID: UUID) {
+        entries.withLock { $0[profileID] = credentials }
+    }
+
+    func load(for profileID: UUID) -> S3Credentials? {
+        entries.withLock { $0[profileID] }
+    }
+
+    func delete(for profileID: UUID) {
+        entries.withLock { $0[profileID] = nil }
     }
 }

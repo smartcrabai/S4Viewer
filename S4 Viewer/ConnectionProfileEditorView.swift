@@ -39,16 +39,22 @@ struct ConnectionProfileEditorView: View {
             Form {
                 TextField("Profile name", text: $draft.name)
                     .focused($focusedField, equals: .name)
+                    .accessibilityIdentifier(A11y.ProfileEditor.name)
                 TextField("Endpoint URL", text: $draft.endpoint)
                     .focused($focusedField, equals: .endpoint)
+                    .accessibilityIdentifier(A11y.ProfileEditor.endpoint)
                 TextField("Region", text: $draft.region)
                     .focused($focusedField, equals: .region)
+                    .accessibilityIdentifier(A11y.ProfileEditor.region)
                 TextField("Bucket", text: $draft.bucket)
                     .focused($focusedField, equals: .bucket)
+                    .accessibilityIdentifier(A11y.ProfileEditor.bucket)
                 TextField("Access key", text: $draft.accessKey)
                     .focused($focusedField, equals: .accessKey)
+                    .accessibilityIdentifier(A11y.ProfileEditor.accessKey)
                 SecureField("Secret key", text: $draft.secretKey)
                     .focused($focusedField, equals: .secretKey)
+                    .accessibilityIdentifier(A11y.ProfileEditor.secretKey)
                 Toggle("Use path-style requests", isOn: $draft.usePathStyle)
             }
             .formStyle(.grouped)
@@ -56,6 +62,7 @@ struct ConnectionProfileEditorView: View {
             if let validationMessage {
                 Text(validationMessage)
                     .foregroundStyle(.red)
+                    .accessibilityIdentifier(A11y.ProfileEditor.validationMessage)
             }
 
             HStack {
@@ -63,10 +70,12 @@ struct ConnectionProfileEditorView: View {
                 Button("Cancel", role: .cancel) {
                     dismiss()
                 }
+                .accessibilityIdentifier(A11y.ProfileEditor.cancel)
                 Button(actionTitle) {
                     save()
                 }
                 .keyboardShortcut(.defaultAction)
+                .accessibilityIdentifier(A11y.ProfileEditor.save)
             }
         }
         .padding(20)

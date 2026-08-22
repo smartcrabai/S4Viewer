@@ -355,7 +355,11 @@ final class S3BrowserModel {
     }
 
     func openFolder(withKey key: String, using profile: ConnectionProfile) async {
-        selectedItemKey = key
+        guard let item = items.first(where: { $0.key == key }), item.kind == .folder else {
+            errorMessage = "Folder \(key.lastS3PathComponent) was not found."
+            return
+        }
+        selectedItemKey = item.key
         await openSelectedFolder(using: profile)
     }
 
