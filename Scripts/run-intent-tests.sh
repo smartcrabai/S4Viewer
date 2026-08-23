@@ -31,6 +31,7 @@ exec xcodebuild test \
     -testPlan IntentTests \
     -destination 'platform=macOS,arch=arm64' \
     -configuration Debug \
+   -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/S4_Viewer-IntentTests" \
     CODE_SIGN_STYLE=Manual \
     CODE_SIGN_IDENTITY="$S4VIEWER_SIGN_IDENTITY" \
     PROVISIONING_PROFILE_SPECIFIER= \
