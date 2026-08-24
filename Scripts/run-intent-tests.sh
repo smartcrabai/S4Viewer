@@ -3,6 +3,9 @@
 # Runs the screen-free end-to-end suite: `IntentTests` drives the app through App Intents,
 # so it never takes the cursor or keyboard the way XCUITest does.
 #
+# The test build uses a private bundle identifier so a separately installed S4 Viewer cannot
+# satisfy the App Intents service lookup or be launched by XCUITest.
+#
 # The intent build also defines S4VIEWER_INTENT_TESTING below. App Intents testing can invoke
 # the app service without forwarding UI-test launch arguments, so that compile-time switch
 # keeps the app on the fixture path end to end.
@@ -36,5 +39,6 @@ exec xcodebuild test \
     CODE_SIGN_IDENTITY="$S4VIEWER_SIGN_IDENTITY" \
     PROVISIONING_PROFILE_SPECIFIER= \
     CODE_SIGN_ENTITLEMENTS= \
+    S4VIEWER_PRODUCT_BUNDLE_IDENTIFIER=ai.smartcrab.s4viewer.intent-tests \
     SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG S4VIEWER_INTENT_TESTING' \
     "$@"

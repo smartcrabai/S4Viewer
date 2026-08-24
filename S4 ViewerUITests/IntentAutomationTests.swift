@@ -6,14 +6,15 @@ import XCTest
 /// through the real App Intents infrastructure, so nothing touches the cursor or keyboard.
 ///
 /// Compiled only when the toolchain ships `AppIntentsTesting` (Xcode 27 and later). Until
-/// then the same intents are exercised in-process by
-/// `S4 ViewerTests/DemoAutomationIntentTests.swift`.
+/// then only focused pieces of the same intents are exercised in-process by
+/// `S4 ViewerTests/DemoModeTests.swift`.
 /// The framework itself requires macOS 27, while the app still deploys to macOS 26.4.
 @available(macOS 27.0, *)
 @MainActor
 final class IntentAutomationTests: XCTestCase {
-    private let app = XCUIApplication(bundleIdentifier: "ai.smartcrab.s4viewer")
+    private let app = XCUIApplication()
     private var definitions: IntentDefinitions!
+    private static let intentBundleIdentifier = "ai.smartcrab.s4viewer.intent-tests"
 
     private static let fixtureRoot = [
         "campaigns/",
@@ -29,11 +30,22 @@ final class IntentAutomationTests: XCTestCase {
 
     override func setUp() async throws {
         continueAfterFailure = false
-        app.launchArguments = ["-S4ViewerDemoData"]
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES", "-S4ViewerDemoData"]
         app.launchEnvironment["S4VIEWER_DEMO_MODE"] = "1"
         app.launch()
-        definitions = IntentDefinitions(bundleIdentifier: "ai.smartcrab.s4viewer")
-        _ = try await definitions.intents["ResetDemoBucketIntent"].makeIntent().run()
+        definitions = IntentDefinitions(bundleIdentifier: Self.intentBundleIdentifier)
+        do {
+            let reset = try XCTUnwrap(
+                definitions.intents["ResetDemoBucketIntent"],
+                "no intents found for \(Self.intentBundleIdentifier); does the build's "
+                    + "S4VIEWER_PRODUCT_BUNDLE_IDENTIFIER match IntentAutomationTests.intentBundleIdentifier?")
+            _ = try await reset.makeIntent().run()
+        } catch {
+            // XCTest does not run tearDown when setUp throws, so the launched
+            // windowless host app would survive the suite as an invisible process.
+            app.terminate()
+            throw error
+        }
     }
 
     override func tearDown() async throws {
@@ -162,6 +174,47 @@ final class IntentAutomationTests: XCTestCase {
             .makeIntent(key: "archive-2025.bin")
             .run()
         XCTAssertEqual(try unsupported.value, "failed:Preview is not available for this file type.")
+    }
+
+    /// Asserts what the intent-test build guarantees structurally: the host scene is a
+    /// windowless `Settings { EmptyView() }`, so launching it never puts a window on screen.
+    /// (The `.prohibited` activation policy is set in code and cannot be observed from here;
+    /// the name intentionally describes the observable window behaviour.)
+    func testIntentTestHostLaunchesWithoutWindows() {
+        // Waiting for absence instead of probing once, so a reverted WindowGroup scene
+        // cannot slip a window in right after an immediate existence check saw none.
+        XCTAssertFalse(
+            app.windows.firstMatch.waitForExistence(timeout: 1),
+            "the intent-test host app must launch without any window")
+    }
+
+    func testUnknownSortModeFails() async throws {
+        do {
+            _ = try await list(sort: "bogus")
+            XCTFail("an unknown sort mode must fail instead of falling back")
+        } catch {
+            XCTAssertTrue(
+                "\(error)".contains("is not a sort mode."),
+                "unexpected error: \(error)"
+            )
+        }
+    }
+
+    func testMissingKeyFailsInsteadOfMutatingNothing() async throws {
+        let before = try await list()
+        do {
+            _ = try await definitions.intents["DeleteItemIntent"]
+                .makeIntent(key: "missing-object.txt")
+                .run()
+            XCTFail("a key outside the current location must fail")
+        } catch {
+            XCTAssertTrue(
+                "\(error)".contains("is not listed in the current location."),
+                "unexpected error: \(error)"
+            )
+        }
+        let after = try await list()
+        XCTAssertEqual(after, before)
     }
 }
 #endif

@@ -39,7 +39,7 @@ Three test plans share the `S4 Viewer` scheme:
 | Test plan | Targets | Screen | Requires |
 |---|---|---|---|
 | `UnitTests` (default) | `S4 ViewerTests` | untouched | - |
-| `IntentTests` | `S4 ViewerTests` + `IntentAutomationTests` | app window appears, input never captured | Xcode 27, real signing identity |
+| `IntentTests` | `S4 ViewerTests` + `IntentAutomationTests` | no window appears, input never captured | Xcode 27, real signing identity |
 | `AllTests` | `S4 ViewerTests` + `S4 ViewerUITests` | taken over | - |
 
 `UnitTests` is the scheme default so a local `xcodebuild test` never starts XCUITest, which
@@ -98,9 +98,9 @@ across relaunches on a signed build, and iCloud profile sync between Macs. See
 
 ### Intent automation (no cursor, no keyboard)
 
-Debug-only, undiscoverable App Intents drive the live demo model without taking over input.
-`S4 ViewerUITests/IntentAutomationTests.swift` covers the launched app through
-`AppIntentsTesting`.
+Debug-only, test-only App Intents drive the live demo model without taking over input. The host
+app launches as a no-window accessory, and the test build uses a private bundle identifier.
+`S4 ViewerUITests/IntentAutomationTests.swift` covers it through `AppIntentsTesting`.
 
 Run the suite with Xcode 27 and a real signing identity:
 
