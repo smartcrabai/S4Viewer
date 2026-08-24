@@ -52,6 +52,24 @@ struct DemoModeTests {
         }
     }
 
+#if !S4VIEWER_INTENT_TESTING
+    /// Guards the compile-time gating: ordinary DEBUG builds must keep every automation
+    /// intent undiscoverable, so Shortcuts/Spotlight never offer them to users. (In the
+    /// intent-test build these symbols do not exist, hence the compilation condition.)
+    @Test
+    func automationIntentsStayUndiscoverableOutsideTheIntentTestBuild() {
+        #expect(!ResetDemoBucketIntent.isDiscoverable)
+        #expect(!ListObjectsIntent.isDiscoverable)
+        #expect(!CurrentLocationIntent.isDiscoverable)
+        #expect(!CreateFolderIntent.isDiscoverable)
+        #expect(!RenameItemIntent.isDiscoverable)
+        #expect(!DeleteItemIntent.isDiscoverable)
+        #expect(!UploadFixturesIntent.isDiscoverable)
+        #expect(!DownloadItemIntent.isDiscoverable)
+        #expect(!PreviewSummaryIntent.isDiscoverable)
+    }
+#endif
+
 #if S4VIEWER_INTENT_TESTING
     @Test @MainActor
     func fallbackAutomationContextConnectsDemoModel() async throws {

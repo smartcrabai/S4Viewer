@@ -1,3 +1,4 @@
+import AppKit
 import OSLog
 import SwiftData
 import SwiftUI
@@ -7,6 +8,10 @@ struct S4_ViewerApp: App {
     private let containerResult: Result<ModelContainer, Error>
 
     init() {
+#if S4VIEWER_INTENT_TESTING
+        // AppIntentsTesting launches the host app; keep it out of the user's desktop.
+        NSApplication.shared.setActivationPolicy(.prohibited)
+#endif
         containerResult = Result {
             let schema = Schema([ConnectionProfile.self])
 #if DEBUG
@@ -28,6 +33,12 @@ struct S4_ViewerApp: App {
     }
 
     var body: some Scene {
+#if S4VIEWER_INTENT_TESTING
+        // Intent tests use the app service, not the window.
+        Settings {
+            EmptyView()
+        }
+#else
         WindowGroup {
             switch containerResult {
             case let .success(container):
@@ -38,9 +49,9 @@ struct S4_ViewerApp: App {
             }
         }
         .defaultSize(width: 1400, height: 900)
+#endif
     }
 }
-
 
 private struct StartupFailureView: View {
     let message: String

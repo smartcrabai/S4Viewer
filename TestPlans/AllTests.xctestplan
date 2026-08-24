@@ -29,6 +29,9 @@
     },
     {
       "parallelizable" : false,
+      "skippedTests" : [
+        "IntentAutomationTests"
+      ],
       "target" : {
         "containerPath" : "container:S4 Viewer.xcodeproj",
         "identifier" : "E16354942F97A7D200E5E267",

@@ -6,9 +6,11 @@ import Foundation
 /// the window process, and otherwise use the same fixture-backed model path without XCUITest
 /// taking over the cursor and keyboard.
 ///
-/// Every intent sets `isDiscoverable = false`, so none of them appear in Shortcuts, Siri, or
-/// Spotlight, and the whole file is compiled out of Release builds. They are only reachable
-/// in a Debug build launched with `-S4ViewerDemoData`.
+/// They stay undiscoverable in normal DEBUG builds. The intent-test build (built only by
+/// `Scripts/run-intent-tests.sh`, never shipped) makes them system-discoverable because
+/// `AppIntentsTesting` resolves intents through the app's published metadata; that build runs
+/// in demo mode against in-memory fixtures with no real credentials or entitlements, so the
+/// temporary exposure is inert. The whole file is compiled out of Release builds.
 
 /// Bridge between the view that owns the model and the intents that drive it. A plain
 /// singleton rather than `@AppDependency`, because the model is created by `ContentView` and
@@ -116,7 +118,9 @@ private func listing(_ browser: S3BrowserModel) -> [String] {
 
 struct ResetDemoBucketIntent: AppIntent {
     static let title: LocalizedStringResource = "Reset Demo Bucket"
+#if !S4VIEWER_INTENT_TESTING
     static let isDiscoverable = false
+#endif
     static let openAppWhenRun = false
 
     @MainActor
@@ -134,7 +138,9 @@ struct ResetDemoBucketIntent: AppIntent {
 
 struct ListObjectsIntent: AppIntent {
     static let title: LocalizedStringResource = "List Objects"
+#if !S4VIEWER_INTENT_TESTING
     static let isDiscoverable = false
+#endif
     static let openAppWhenRun = false
 
     @Parameter(title: "Prefix") var prefix: String
@@ -161,7 +167,9 @@ struct ListObjectsIntent: AppIntent {
 
 struct CurrentLocationIntent: AppIntent {
     static let title: LocalizedStringResource = "Current Location"
+#if !S4VIEWER_INTENT_TESTING
     static let isDiscoverable = false
+#endif
     static let openAppWhenRun = false
 
     @MainActor
@@ -175,7 +183,9 @@ struct CurrentLocationIntent: AppIntent {
 
 struct CreateFolderIntent: AppIntent {
     static let title: LocalizedStringResource = "Create Folder"
+#if !S4VIEWER_INTENT_TESTING
     static let isDiscoverable = false
+#endif
     static let openAppWhenRun = false
 
     @Parameter(title: "Name") var name: String
@@ -191,7 +201,9 @@ struct CreateFolderIntent: AppIntent {
 
 struct RenameItemIntent: AppIntent {
     static let title: LocalizedStringResource = "Rename Item"
+#if !S4VIEWER_INTENT_TESTING
     static let isDiscoverable = false
+#endif
     static let openAppWhenRun = false
 
     @Parameter(title: "Key") var key: String
@@ -209,7 +221,9 @@ struct RenameItemIntent: AppIntent {
 
 struct DeleteItemIntent: AppIntent {
     static let title: LocalizedStringResource = "Delete Item"
+#if !S4VIEWER_INTENT_TESTING
     static let isDiscoverable = false
+#endif
     static let openAppWhenRun = false
 
     @Parameter(title: "Key") var key: String
@@ -228,7 +242,9 @@ struct DeleteItemIntent: AppIntent {
 
 struct UploadFixturesIntent: AppIntent {
     static let title: LocalizedStringResource = "Upload Fixtures"
+#if !S4VIEWER_INTENT_TESTING
     static let isDiscoverable = false
+#endif
     static let openAppWhenRun = false
 
     @MainActor
@@ -243,7 +259,9 @@ struct UploadFixturesIntent: AppIntent {
 
 struct DownloadItemIntent: AppIntent {
     static let title: LocalizedStringResource = "Download Item"
+#if !S4VIEWER_INTENT_TESTING
     static let isDiscoverable = false
+#endif
     static let openAppWhenRun = false
 
     @Parameter(title: "Key") var key: String
@@ -266,7 +284,9 @@ struct DownloadItemIntent: AppIntent {
 
 struct PreviewSummaryIntent: AppIntent {
     static let title: LocalizedStringResource = "Preview Summary"
+#if !S4VIEWER_INTENT_TESTING
     static let isDiscoverable = false
+#endif
     static let openAppWhenRun = false
 
     @Parameter(title: "Key") var key: String
