@@ -322,5 +322,11 @@
     "seen": 1787578548.929312,
     "ast_hash": "084fe98319c5fc9b442633280e322baf",
     "semantic_hash": "084fe98319c5fc9b442633280e322baf"
+  },
+  ".github/workflows/release.yml": {
+    "mtime": 1787881424.672446,
+    "seen": 1787881490.9511218,
+    "ast_hash": "ac6cbffdaa06d94982d3bb57dda6b6cf",
+    "semantic_hash": ""
   }
 }
