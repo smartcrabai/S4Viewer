@@ -41,7 +41,7 @@ nonisolated struct S3ListObjectsResponseParser {
                 return S3BrowserItem.object(
                     key: key,
                     size: size ?? 0,
-                    modifiedAt: parseDate(element.firstValue(for: "LastModified")),
+                    modifiedAt: parseS3Timestamp(element.firstValue(for: "LastModified")),
                     eTag: element.firstValue(for: "ETag"),
                     contentType: nil
                 )
@@ -59,19 +59,20 @@ nonisolated struct S3ListObjectsResponseParser {
         }
         return value.removingPercentEncoding
     }
-
-    private func parseDate(_ value: String?) -> Date? {
-        guard let value else {
-            return nil
-        }
-        if let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(value) {
-            return date
-        }
-        return try? Date.ISO8601FormatStyle().parse(value)
-    }
 }
 
-private extension XMLElement {
+/// ISO 8601 with or without fractional seconds, as S3 and compatible services emit it.
+nonisolated func parseS3Timestamp(_ value: String?) -> Date? {
+    guard let value else {
+        return nil
+    }
+    if let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(value) {
+        return date
+    }
+    return try? Date.ISO8601FormatStyle().parse(value)
+}
+
+extension XMLElement {
     nonisolated func firstValue(for name: String) -> String? {
         elements(forName: name).first?.stringValue
     }

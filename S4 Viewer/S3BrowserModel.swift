@@ -47,6 +47,14 @@ final class S3BrowserModel {
     private(set) var transfers: [TransferActivity] = []
     private(set) var errorMessage: String?
 
+    /// Bucket opened from the bucket list; `nil` at the list itself or for a fixed-bucket profile.
+    private(set) var currentBucket: S3Bucket?
+    /// The profile leaves the bucket empty, so the root is the `ListBuckets` result.
+    private(set) var browsesAllBuckets: Bool = false
+
+    @ObservationIgnored
+    private var knownBuckets: [S3Bucket] = []
+
     @ObservationIgnored
     private let clientFactory: @Sendable (S3ConnectionConfiguration) -> any S3ClientProtocol
     @ObservationIgnored
@@ -111,12 +119,17 @@ final class S3BrowserModel {
         return items.first(where: { $0.key == selectedItemKey })
     }
 
+    var isAtBucketList: Bool {
+        browsesAllBuckets && currentBucket == nil
+    }
+
     var canNavigateUp: Bool {
-        !currentPrefix.isEmpty
+        !currentPrefix.isEmpty || (browsesAllBuckets && currentBucket != nil)
     }
 
     var currentLocationTitle: String {
-        currentPrefix.isEmpty ? "/" : "/" + currentPrefix
+        let bucketPath = currentBucket.map { $0.name + "/" } ?? ""
+        return "/" + bucketPath + currentPrefix
     }
 
     func connect(to profile: ConnectionProfile?) async {
@@ -130,11 +143,19 @@ final class S3BrowserModel {
 
     func refresh(using profile: ConnectionProfile) async {
         do {
+            browsesAllBuckets = profile.bucket.isEmpty
+            if !browsesAllBuckets {
+                currentBucket = nil
+            }
             let client = try makeClient(for: profile)
             isLoading = true
             errorMessage = nil
-            let page = try await client.list(prefix: currentPrefix)
-            items = page.items
+            if isAtBucketList {
+                knownBuckets = try await client.listBuckets()
+                items = knownBuckets.map(S3BrowserItem.bucket)
+            } else {
+                items = try await client.list(prefix: currentPrefix).items
+            }
             isLoading = false
             if let selectedItemKey, !items.contains(where: { $0.key == selectedItemKey }) {
                 self.selectedItemKey = nil
@@ -147,15 +168,27 @@ final class S3BrowserModel {
     }
 
     func navigateUp(using profile: ConnectionProfile) async {
-        currentPrefix = currentPrefix.parentS3Prefix
+        if currentPrefix.isEmpty, browsesAllBuckets, currentBucket != nil {
+            currentBucket = nil
+            selectedItemKey = nil
+            clearPreview()
+        } else {
+            currentPrefix = currentPrefix.parentS3Prefix
+        }
         await refresh(using: profile)
     }
 
     func openSelectedFolder(using profile: ConnectionProfile) async {
-        guard let selectedItem, selectedItem.kind == .folder else {
+        guard let selectedItem, selectedItem.kind != .object else {
             return
         }
-        currentPrefix = selectedItem.key
+        if selectedItem.kind == .bucket {
+            currentBucket = knownBuckets.first { $0.name == selectedItem.key }
+                ?? S3Bucket(name: selectedItem.key, region: nil, createdAt: nil)
+            currentPrefix = ""
+        } else {
+            currentPrefix = selectedItem.key
+        }
         selectedItemKey = nil
         clearPreview()
         await refresh(using: profile)
@@ -171,7 +204,9 @@ final class S3BrowserModel {
         }
 
         guard item.kind == .object else {
-            previewState = .empty("Folders do not have a preview.")
+            previewState = .empty(
+                item.kind == .bucket ? "Buckets do not have a preview." : "Folders do not have a preview."
+            )
             return
         }
 
@@ -235,6 +270,9 @@ final class S3BrowserModel {
     }
 
     func createFolder(named folderName: String, using profile: ConnectionProfile) async {
+        guard !isAtBucketList else {
+            return
+        }
         do {
             let client = try makeClient(for: profile)
             try await client.createFolder(named: folderName, in: currentPrefix)
@@ -245,6 +283,9 @@ final class S3BrowserModel {
     }
 
     func renameSelection(to newName: String, using profile: ConnectionProfile) async {
+        guard !isAtBucketList else {
+            return
+        }
         guard let item = selectedItem else {
             return
         }
@@ -260,6 +301,9 @@ final class S3BrowserModel {
     }
 
     func deleteSelection(using profile: ConnectionProfile) async {
+        guard !isAtBucketList else {
+            return
+        }
         guard let item = selectedItem else {
             return
         }
@@ -276,6 +320,9 @@ final class S3BrowserModel {
     }
 
     func uploadFiles(_ urls: [URL], using profile: ConnectionProfile) async {
+        guard !isAtBucketList else {
+            return
+        }
         do {
             let client = try makeClient(for: profile)
             let prefix = currentPrefix
@@ -355,7 +402,7 @@ final class S3BrowserModel {
     }
 
     func openFolder(withKey key: String, using profile: ConnectionProfile) async {
-        guard let item = items.first(where: { $0.key == key }), item.kind == .folder else {
+        guard let item = items.first(where: { $0.key == key }), item.kind != .object else {
             errorMessage = "Folder \(key.lastS3PathComponent) was not found."
             return
         }
@@ -377,13 +424,18 @@ final class S3BrowserModel {
     }
 
     private func makeClient(for profile: ConnectionProfile) throws -> any S3ClientProtocol {
-        clientFactory(try profile.configuration(credentials: credentialProvider(profile.id)))
+        var configuration = try profile.configuration(credentials: credentialProvider(profile.id))
+        if let currentBucket {
+            configuration = configuration.scoped(to: currentBucket)
+        }
+        return clientFactory(configuration)
     }
 
     private func resetBrowser() {
         items = []
         selectedItemKey = nil
         currentPrefix = ""
+        currentBucket = nil
         filterText = ""
         isLoading = false
         transfers = []

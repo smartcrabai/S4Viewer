@@ -28,6 +28,8 @@ enum S3ClientError: LocalizedError {
 }
 
 protocol S3ClientProtocol: Sendable {
+    /// `ListBuckets` against the service root, for profiles that leave the bucket empty.
+    func listBuckets() async throws -> [S3Bucket]
     func list(prefix: String) async throws -> S3ListObjectsPage
     func createFolder(named folderName: String, in prefix: String) async throws
     func rename(item: S3BrowserItem, to newName: String) async throws -> String
@@ -81,6 +83,7 @@ nonisolated final class S3HTTPClient: S3ClientProtocol, @unchecked Sendable {
     private let multipartPlanner: MultipartTransferPlanner
     private let parser = S3ListObjectsResponseParser()
     private let fileManager: FileManager
+    private let bucketParser = S3ListBucketsResponseParser()
 
     init(
         configuration: S3ConnectionConfiguration,
@@ -94,6 +97,30 @@ nonisolated final class S3HTTPClient: S3ClientProtocol, @unchecked Sendable {
         self.signer = signer
         self.multipartPlanner = multipartPlanner
         self.fileManager = fileManager
+    }
+
+    func listBuckets() async throws -> [S3Bucket] {
+        var buckets: [S3Bucket] = []
+        var continuationToken: String?
+
+        // AWS paginates only when asked to; follow a token anyway in case a service sends one.
+        repeat {
+            let queryItems = continuationToken.map {
+                [URLQueryItem(name: S3QueryKey.continuationToken, value: $0)]
+            } ?? []
+            let (data, _) = try await performRequest(
+                method: .get,
+                key: nil,
+                queryItems: queryItems,
+                headers: [:],
+                payload: Data()
+            )
+            let page = try bucketParser.parse(data: data)
+            buckets.append(contentsOf: page.buckets)
+            continuationToken = page.continuationToken
+        } while continuationToken != nil
+
+        return buckets
     }
 
     func list(prefix: String) async throws -> S3ListObjectsPage {
@@ -479,22 +506,23 @@ nonisolated final class S3HTTPClient: S3ClientProtocol, @unchecked Sendable {
             throw URLError(.badURL)
         }
 
-        if configuration.usePathStyle {
-            components.percentEncodedPath = makePercentEncodedPath(
-                basePath: configuration.endpointURL.path,
-                bucket: configuration.bucket,
-                key: key
-            )
-        } else {
+        // An empty bucket addresses the service root, which is where `ListBuckets` goes.
+        let bucket = configuration.bucket.isEmpty ? nil : configuration.bucket
+        if let bucket, !configuration.usePathStyle {
             let existingHost = components.host ?? ""
-            components.host = "\(configuration.bucket).\(existingHost)"
+            components.host = "\(bucket).\(existingHost)"
             components.percentEncodedPath = makePercentEncodedPath(
                 basePath: configuration.endpointURL.path,
                 bucket: nil,
                 key: key
             )
+        } else {
+            components.percentEncodedPath = makePercentEncodedPath(
+                basePath: configuration.endpointURL.path,
+                bucket: bucket,
+                key: key
+            )
         }
-
         components.queryItems = queryItems.isEmpty ? nil : queryItems
         guard let url = components.url else {
             throw URLError(.badURL)

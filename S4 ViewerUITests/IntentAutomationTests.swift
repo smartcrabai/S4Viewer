@@ -176,6 +176,22 @@ final class IntentAutomationTests: XCTestCase {
         XCTAssertEqual(try unsupported.value, "failed:Preview is not available for this file type.")
     }
 
+    func testProfileWithoutBucketBrowsesEveryBucket() async throws {
+        let intent = try XCTUnwrap(definitions.intents["BrowseAllBucketsIntent"])
+
+        let root: [String] = try await intent.makeIntent().run().value
+        XCTAssertEqual(root, ["/", "smartcrab-archive", "smartcrab-logs", "smartcrab-media"])
+
+        let bucket: [String] = try await intent.makeIntent(bucket: "smartcrab-logs").run().value
+        XCTAssertEqual(bucket, ["/smartcrab-logs/"] + Self.fixtureRoot)
+
+        let nested: [String] = try await intent.makeIntent(bucket: "smartcrab-logs", prefix: "campaigns/").run().value
+        XCTAssertEqual(nested, ["/smartcrab-logs/campaigns/", "campaigns/2026-spring/", "campaigns/brief.md"])
+
+        let backToList: [String] = try await intent.makeIntent(bucket: "smartcrab-logs", navigateUp: true).run().value
+        XCTAssertEqual(backToList, ["/", "smartcrab-archive", "smartcrab-logs", "smartcrab-media"])
+    }
+
     /// Asserts what the intent-test build guarantees structurally: the host scene is a
     /// windowless `Settings { EmptyView() }`, so launching it never puts a window on screen.
     /// (The `.prohibited` activation policy is set in code and cannot be observed from here;

@@ -5,6 +5,7 @@ A native macOS browser for Amazon S3 and S3-compatible object stores. Built with
 ## Features
 
 - **Connection profiles** - Sync S3 / S3-compatible endpoint metadata with SwiftData and CloudKit while keeping access keys and secret keys in iCloud Keychain. Both path-style and virtual-hosted-style addressing are supported.
+- **All buckets** - Leave a profile's bucket empty to start at the `ListBuckets` result and open any bucket the credentials can see; Up from a bucket root returns to the list. On AWS each bucket is addressed in its own region (`BucketRegion`); S3-compatible endpoints keep the profile's region and host. A profile with a bucket set browses only that bucket.
 - **Object browsing** - Folders pinned on top, sort by name / size / modification date / kind, and incremental filtering.
 - **Upload / download** - Files larger than 8 MiB automatically switch to multipart transfers. Multi-file uploads run up to three in parallel.
 - **Preview** - Inline rendering for text-like objects, Quick Look for everything else.
@@ -66,6 +67,7 @@ Unit tests are written with Swift Testing:
 |---|---|
 | `S3RequestSignerTests.swift` | Signature V4 against AWS reference test vectors |
 | `S3ListObjectsResponseParserTests.swift` | `ListObjectsV2` XML parsing |
+| `AllBucketsTests.swift` | `ListBuckets` parsing and request URLs, per-bucket region scoping, bucket-list navigation |
 | `MultipartTransferPlannerTests.swift` | Multipart part planning |
 | `ConnectionProfileDraftTests.swift` | Connection input validation |
 | `ConnectionCredentialStoreTests.swift` | Keychain credential storage lifecycle |
@@ -90,7 +92,8 @@ Every element they drive carries an identifier from `AccessibilityIdentifiers.sw
 ### Running the UI suite without losing the desktop
 
 XCUITest takes over the cursor and keyboard. Run `AllTests` in a VM or on a spare Mac; use
-`UnitTests` for normal local work. There is deliberately no CI job for the UI suite.
+`UnitTests` for normal local work. There is deliberately no CI job for the UI suite;
+`.github/workflows/ci.yml` runs `UnitTests` on GitHub-hosted `macos-26` for every pull request.
 
 Still manual: multipart uploads above 8 MiB against a real endpoint, Keychain persistence
 across relaunches on a signed build, and iCloud profile sync between Macs. See
@@ -117,6 +120,6 @@ and Quick Look rendering.
 |---|---|
 | Persistence | `ConnectionProfile.swift` (SwiftData `@Model`), `ConnectionCredentialStore.swift` (iCloud Keychain) |
 | Input / validation | `ConnectionProfileDraft.swift`, `S3ConnectionConfiguration.swift` |
-| Networking | `S3HTTPClient.swift`, `S3RequestSigner.swift` |
+| Networking | `S3HTTPClient.swift`, `S3RequestSigner.swift`, `S3ListBucketsResponseParser.swift` |
 | Domain model | `S3BrowserModel.swift`, `S3BrowserItem.swift`, `MultipartTransferPlanner.swift`, `ObjectPreviewKind.swift` |
 | UI | `ContentView.swift`, `ConnectionProfileEditorView.swift`, `NamePromptView.swift`, `QuickLookPreviewView.swift` |

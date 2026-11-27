@@ -46,7 +46,7 @@ struct ConnectionProfileEditorView: View {
                 TextField("Region", text: $draft.region)
                     .focused($focusedField, equals: .region)
                     .accessibilityIdentifier(A11y.ProfileEditor.region)
-                TextField("Bucket", text: $draft.bucket)
+                TextField("Bucket (empty for all buckets)", text: $draft.bucket)
                     .focused($focusedField, equals: .bucket)
                     .accessibilityIdentifier(A11y.ProfileEditor.bucket)
                 TextField("Access key", text: $draft.accessKey)
