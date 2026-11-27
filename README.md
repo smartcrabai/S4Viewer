@@ -6,6 +6,7 @@ A native macOS browser for Amazon S3 and S3-compatible object stores. Built with
 
 - **Connection profiles** - Sync S3 / S3-compatible endpoint metadata with SwiftData and CloudKit while keeping access keys and secret keys in iCloud Keychain. Both path-style and virtual-hosted-style addressing are supported.
 - **All buckets** - Leave a profile's bucket empty to start at the `ListBuckets` result and open any bucket the credentials can see; Up from a bucket root returns to the list. On AWS each bucket is addressed in its own region (`BucketRegion`); S3-compatible endpoints keep the profile's region and host. A profile with a bucket set browses only that bucket.
+- **IAM authentication** - Access keys may carry an optional session token (`X-Amz-Security-Token`) for temporary credentials. With a role ARN (and an optional external ID) the stored keys call `sts:AssumeRole` and the returned temporary credentials sign every S3 request; they live in memory only and are re-assumed five minutes before they expire, or when the keys or role change. AWS endpoints use regional STS (`sts.<region>.amazonaws.com`); S3-compatible endpoints such as MinIO are asked on the endpoint itself.
 - **Object browsing** - Folders pinned on top, sort by name / size / modification date / kind, and incremental filtering.
 - **Upload / download** - Files larger than 8 MiB automatically switch to multipart transfers. Multi-file uploads run up to three in parallel.
 - **Preview** - Inline rendering for text-like objects, Quick Look for everything else.
@@ -31,7 +32,7 @@ xcodebuild -project "S4 Viewer.xcodeproj" \
            build
 ```
 
-The app is built with App Sandbox and Hardened Runtime enabled. The user-selected read-write entitlement (`com.apple.security.files.user-selected.read-write`) is used for upload and download. S3 credentials are stored as synchronizable data-protection Keychain items rather than in the SwiftData store.
+The app is built with App Sandbox and Hardened Runtime enabled. The user-selected read-write entitlement (`com.apple.security.files.user-selected.read-write`) is used for upload and download. S3 credentials (access key, secret key, session token) are stored as synchronizable data-protection Keychain items rather than in the SwiftData store; the role ARN and external ID are profile metadata.
 
 ## Tests
 
@@ -68,6 +69,7 @@ Unit tests are written with Swift Testing:
 | `S3RequestSignerTests.swift` | Signature V4 against AWS reference test vectors |
 | `S3ListObjectsResponseParserTests.swift` | `ListObjectsV2` XML parsing |
 | `AllBucketsTests.swift` | `ListBuckets` parsing and request URLs, per-bucket region scoping, bucket-list navigation |
+| `IAMAuthTests.swift` | Session-token signing, profile IAM fields, STS `AssumeRole` request/response against a stubbed endpoint, temporary-credential caching and refresh |
 | `MultipartTransferPlannerTests.swift` | Multipart part planning |
 | `ConnectionProfileDraftTests.swift` | Connection input validation |
 | `ConnectionCredentialStoreTests.swift` | Keychain credential storage lifecycle |
@@ -120,6 +122,6 @@ and Quick Look rendering.
 |---|---|
 | Persistence | `ConnectionProfile.swift` (SwiftData `@Model`), `ConnectionCredentialStore.swift` (iCloud Keychain) |
 | Input / validation | `ConnectionProfileDraft.swift`, `S3ConnectionConfiguration.swift` |
-| Networking | `S3HTTPClient.swift`, `S3RequestSigner.swift`, `S3ListBucketsResponseParser.swift` |
+| Networking | `S3HTTPClient.swift`, `S3RequestSigner.swift`, `S3ListBucketsResponseParser.swift`, `STSAssumeRole.swift` |
 | Domain model | `S3BrowserModel.swift`, `S3BrowserItem.swift`, `MultipartTransferPlanner.swift`, `ObjectPreviewKind.swift` |
 | UI | `ContentView.swift`, `ConnectionProfileEditorView.swift`, `NamePromptView.swift`, `QuickLookPreviewView.swift` |

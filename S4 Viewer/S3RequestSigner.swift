@@ -27,6 +27,7 @@ nonisolated struct S3RequestSigner {
         payload: Data,
         credentials: S3Credentials,
         region: String,
+        service: String = "s3",
         timestamp: Date = .now
     ) throws -> URLRequest {
         guard let url = request.url else {
@@ -45,6 +46,9 @@ nonisolated struct S3RequestSigner {
         signedRequest.setValue(host, forHTTPHeaderField: "Host")
         signedRequest.setValue(timestampValue, forHTTPHeaderField: "x-amz-date")
         signedRequest.setValue(payloadHash, forHTTPHeaderField: "x-amz-content-sha256")
+        if let sessionToken = credentials.sessionToken {
+            signedRequest.setValue(sessionToken, forHTTPHeaderField: "X-Amz-Security-Token")
+        }
         if !payload.isEmpty {
             signedRequest.httpBody = payload
         }
@@ -63,7 +67,7 @@ nonisolated struct S3RequestSigner {
         let stringToSign = [
             "AWS4-HMAC-SHA256",
             timestampValue,
-            "\(scopeDate)/\(region)/s3/aws4_request",
+            "\(scopeDate)/\(region)/\(service)/aws4_request",
             SHA256.hash(data: Data(canonicalRequest.utf8)).hexDigest,
         ].joined(separator: "\n")
 
@@ -71,14 +75,14 @@ nonisolated struct S3RequestSigner {
             secretAccessKey: credentials.secretAccessKey,
             date: scopeDate,
             region: region,
-            service: "s3"
+            service: service
         )
         let signature = HMAC<SHA256>.authenticationCode(
             for: Data(stringToSign.utf8),
             using: signingKey
         ).hexDigest
 
-        let authorization = "AWS4-HMAC-SHA256 Credential=\(credentials.accessKeyID)/\(scopeDate)/\(region)/s3/aws4_request,SignedHeaders=\(signedHeaders),Signature=\(signature)"
+        let authorization = "AWS4-HMAC-SHA256 Credential=\(credentials.accessKeyID)/\(scopeDate)/\(region)/\(service)/aws4_request,SignedHeaders=\(signedHeaders),Signature=\(signature)"
         signedRequest.setValue(authorization, forHTTPHeaderField: "Authorization")
         return signedRequest
     }

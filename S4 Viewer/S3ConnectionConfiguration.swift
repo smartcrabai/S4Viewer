@@ -3,9 +3,11 @@ import Foundation
 nonisolated struct S3Credentials: Codable, Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
     let accessKeyID: String
     let secretAccessKey: String
+    /// STS session token for temporary credentials; sent as `X-Amz-Security-Token`.
+    var sessionToken: String? = nil
 
     var description: String {
-        "S3Credentials(accessKeyID: \(accessKeyID), secretAccessKey: [REDACTED])"
+        "S3Credentials(accessKeyID: \(accessKeyID), secretAccessKey: [REDACTED], sessionToken: \(sessionToken == nil ? "none" : "[REDACTED]"))"
     }
 
     var debugDescription: String {
@@ -13,13 +15,21 @@ nonisolated struct S3Credentials: Codable, Equatable, Sendable, CustomStringConv
     }
 }
 
+/// `sts:AssumeRole` target. The base credentials sign the call; the returned temporary
+/// credentials sign every S3 request.
+nonisolated struct AssumeRoleSettings: Equatable, Hashable, Sendable {
+    let roleARN: String
+    let externalID: String?
+}
+
 nonisolated struct S3ConnectionConfiguration: Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
-    let name: String
-    let endpointURL: URL
-    let region: String
-    let bucket: String
-    let credentials: S3Credentials
-    let usePathStyle: Bool
+    var name: String
+    var endpointURL: URL
+    var region: String
+    var bucket: String
+    var credentials: S3Credentials
+    var usePathStyle: Bool
+    var assumeRole: AssumeRoleSettings? = nil
 
     var description: String {
         "S3ConnectionConfiguration(name: \(name), endpointHost: \(endpointURL.host ?? endpointURL.absoluteString), region: \(region), bucket: \(bucket), credentials: [REDACTED], usePathStyle: \(usePathStyle))"
@@ -33,8 +43,8 @@ nonisolated struct S3ConnectionConfiguration: Equatable, Sendable, CustomStringC
     /// to the bucket's own region, so a reported `BucketRegion` replaces the signing region and
     /// the regional host. S3-compatible endpoints keep the profile's region and host.
     func scoped(to bucket: S3Bucket) -> S3ConnectionConfiguration {
-        var scopedEndpoint = endpointURL
-        var scopedRegion = region
+        var scoped = self
+        scoped.bucket = bucket.name
         if
             let bucketRegion = bucket.region,
             let host = endpointURL.host?.lowercased(),
@@ -42,22 +52,14 @@ nonisolated struct S3ConnectionConfiguration: Equatable, Sendable, CustomStringC
             var components = URLComponents(url: endpointURL, resolvingAgainstBaseURL: false)
         {
             components.host = "s3.\(bucketRegion).amazonaws.com"
-            scopedEndpoint = components.url ?? endpointURL
-            scopedRegion = bucketRegion
+            scoped.endpointURL = components.url ?? endpointURL
+            scoped.region = bucketRegion
         }
-
-        return S3ConnectionConfiguration(
-            name: name,
-            endpointURL: scopedEndpoint,
-            region: scopedRegion,
-            bucket: bucket.name,
-            credentials: credentials,
-            usePathStyle: usePathStyle
-        )
+        return scoped
     }
 
     /// `s3.amazonaws.com`, `s3.<region>.amazonaws.com`, or the legacy `s3-<region>.amazonaws.com`.
-    private static func isAWSS3Host(_ host: String) -> Bool {
+    static func isAWSS3Host(_ host: String) -> Bool {
         guard host.hasSuffix(".amazonaws.com") else {
             return false
         }

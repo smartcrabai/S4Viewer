@@ -9,6 +9,10 @@ final class ConnectionProfile {
     var region: String = ""
     var bucket: String = ""
     var usePathStyle: Bool = true
+    /// Empty means the stored keys sign requests directly. Not secret, so it syncs with the
+    /// profile; keys and session tokens stay in the Keychain.
+    var roleARN: String = ""
+    var externalID: String = ""
     var createdAt: Date = Date.now
     var updatedAt: Date = Date.now
 
@@ -19,6 +23,8 @@ final class ConnectionProfile {
         region: String,
         bucket: String,
         usePathStyle: Bool,
+        roleARN: String = "",
+        externalID: String = "",
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
@@ -28,6 +34,8 @@ final class ConnectionProfile {
         self.region = region
         self.bucket = bucket
         self.usePathStyle = usePathStyle
+        self.roleARN = roleARN
+        self.externalID = externalID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -38,7 +46,9 @@ final class ConnectionProfile {
             endpoint: validated.endpointURL.absoluteString,
             region: validated.region,
             bucket: validated.bucket,
-            usePathStyle: validated.usePathStyle
+            usePathStyle: validated.usePathStyle,
+            roleARN: validated.assumeRole?.roleARN ?? "",
+            externalID: validated.assumeRole?.externalID ?? ""
         )
     }
 
@@ -48,6 +58,8 @@ final class ConnectionProfile {
         region = validated.region
         bucket = validated.bucket
         usePathStyle = validated.usePathStyle
+        roleARN = validated.assumeRole?.roleARN ?? ""
+        externalID = validated.assumeRole?.externalID ?? ""
         updatedAt = now
     }
 

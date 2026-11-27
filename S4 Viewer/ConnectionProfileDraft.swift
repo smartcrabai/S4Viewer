@@ -6,6 +6,8 @@ nonisolated enum ConnectionProfileValidationError: LocalizedError, Equatable {
     case missingRegion
     case missingAccessKey
     case missingSecretKey
+    case invalidRoleARN
+    case externalIDWithoutRole
 
     var errorDescription: String? {
         switch self {
@@ -19,6 +21,10 @@ nonisolated enum ConnectionProfileValidationError: LocalizedError, Equatable {
             return "Enter an access key."
         case .missingSecretKey:
             return "Enter a secret key."
+        case .invalidRoleARN:
+            return "Enter a role ARN such as arn:aws:iam::123456789012:role/Name, or leave it empty."
+        case .externalIDWithoutRole:
+            return "An external ID needs a role ARN."
         }
     }
 }
@@ -31,9 +37,11 @@ nonisolated struct ValidatedConnectionProfile: Equatable, Sendable {
     let accessKey: String
     let secretKey: String
     let usePathStyle: Bool
+    var sessionToken: String? = nil
+    var assumeRole: AssumeRoleSettings? = nil
 
     var credentials: S3Credentials {
-        S3Credentials(accessKeyID: accessKey, secretAccessKey: secretKey)
+        S3Credentials(accessKeyID: accessKey, secretAccessKey: secretKey, sessionToken: sessionToken)
     }
 
     var configuration: S3ConnectionConfiguration {
@@ -43,7 +51,8 @@ nonisolated struct ValidatedConnectionProfile: Equatable, Sendable {
             region: region,
             bucket: bucket,
             credentials: credentials,
-            usePathStyle: usePathStyle
+            usePathStyle: usePathStyle,
+            assumeRole: assumeRole
         )
     }
 }
@@ -56,6 +65,9 @@ nonisolated struct ConnectionProfileDraft: Equatable, Sendable {
     var accessKey: String = ""
     var secretKey: String = ""
     var usePathStyle: Bool = true
+    var sessionToken: String = ""
+    var roleARN: String = ""
+    var externalID: String = ""
 
     init() {}
 
@@ -66,7 +78,10 @@ nonisolated struct ConnectionProfileDraft: Equatable, Sendable {
         bucket: String,
         accessKey: String,
         secretKey: String,
-        usePathStyle: Bool
+        usePathStyle: Bool,
+        sessionToken: String = "",
+        roleARN: String = "",
+        externalID: String = ""
     ) {
         self.name = name
         self.endpoint = endpoint
@@ -75,6 +90,9 @@ nonisolated struct ConnectionProfileDraft: Equatable, Sendable {
         self.accessKey = accessKey
         self.secretKey = secretKey
         self.usePathStyle = usePathStyle
+        self.sessionToken = sessionToken
+        self.roleARN = roleARN
+        self.externalID = externalID
     }
 
     init(profile: ConnectionProfile, credentials: S3Credentials?) {
@@ -84,7 +102,10 @@ nonisolated struct ConnectionProfileDraft: Equatable, Sendable {
         bucket = profile.bucket
         accessKey = credentials?.accessKeyID ?? ""
         secretKey = credentials?.secretAccessKey ?? ""
+        sessionToken = credentials?.sessionToken ?? ""
         usePathStyle = profile.usePathStyle
+        roleARN = profile.roleARN
+        externalID = profile.externalID
     }
 
     func validated() throws -> ValidatedConnectionProfile {
@@ -122,6 +143,16 @@ nonisolated struct ConnectionProfileDraft: Equatable, Sendable {
             throw ConnectionProfileValidationError.missingSecretKey
         }
 
+        let normalizedToken = sessionToken.trimmed()
+        let normalizedRoleARN = roleARN.trimmed()
+        let normalizedExternalID = externalID.trimmed()
+        guard normalizedRoleARN.isEmpty || normalizedRoleARN.hasPrefix("arn:") else {
+            throw ConnectionProfileValidationError.invalidRoleARN
+        }
+        guard normalizedExternalID.isEmpty || !normalizedRoleARN.isEmpty else {
+            throw ConnectionProfileValidationError.externalIDWithoutRole
+        }
+
         return ValidatedConnectionProfile(
             name: normalizedName,
             endpointURL: endpointURL,
@@ -129,7 +160,14 @@ nonisolated struct ConnectionProfileDraft: Equatable, Sendable {
             bucket: normalizedBucket,
             accessKey: normalizedAccessKey,
             secretKey: normalizedSecretKey,
-            usePathStyle: usePathStyle
+            usePathStyle: usePathStyle,
+            sessionToken: normalizedToken.isEmpty ? nil : normalizedToken,
+            assumeRole: normalizedRoleARN.isEmpty
+                ? nil
+                : AssumeRoleSettings(
+                    roleARN: normalizedRoleARN,
+                    externalID: normalizedExternalID.isEmpty ? nil : normalizedExternalID
+                )
         )
     }
 }

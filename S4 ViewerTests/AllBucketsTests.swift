@@ -117,7 +117,7 @@ struct S3HTTPClientListBucketsTests {
 
     @Test(arguments: [false, true])
     func listsBucketsFromServiceRootAndFollowsContinuation(usePathStyle: Bool) async throws {
-        StubURLProtocol.reset(responses: [
+        StubURLProtocol.reset(host: "s3.us-east-1.amazonaws.com", responses: [
             """
             <ListAllMyBucketsResult><Buckets><Bucket><Name>logs</Name></Bucket></Buckets>\
             <ContinuationToken>page-2</ContinuationToken></ListAllMyBucketsResult>
@@ -130,47 +130,13 @@ struct S3HTTPClientListBucketsTests {
         let buckets = try await makeClient(usePathStyle: usePathStyle).listBuckets()
 
         #expect(buckets.map(\.name) == ["logs", "media"])
-        let requests = StubURLProtocol.recordedRequests
+        let requests = StubURLProtocol.recordedRequests(host: "s3.us-east-1.amazonaws.com").map(\.request)
         #expect(requests.map { $0.url?.absoluteString } == [
             "https://s3.us-east-1.amazonaws.com/",
             "https://s3.us-east-1.amazonaws.com/?continuation-token=page-2",
         ])
         #expect(requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization")?.hasPrefix("AWS4-HMAC-SHA256") == true })
     }
-}
-
-/// Serves canned bodies in order and records each request, so client tests never reach the network.
-final class StubURLProtocol: URLProtocol {
-    private struct State {
-        var responses: [String] = []
-        var requests: [URLRequest] = []
-    }
-
-    private static let state = Mutex(State())
-
-    static func reset(responses: [String]) {
-        state.withLock { $0 = State(responses: responses) }
-    }
-
-    static var recordedRequests: [URLRequest] {
-        state.withLock { $0.requests }
-    }
-
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-    override func startLoading() {
-        let body = Self.state.withLock { state -> String in
-            state.requests.append(request)
-            return state.responses.isEmpty ? "" : state.responses.removeFirst()
-        }
-        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data(body.utf8))
-        client?.urlProtocolDidFinishLoading(self)
-    }
-
-    override func stopLoading() {}
 }
 
 @MainActor

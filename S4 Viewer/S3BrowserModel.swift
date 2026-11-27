@@ -67,6 +67,10 @@ final class S3BrowserModel {
     private var previewRequestID = UUID()
     @ObservationIgnored
     private let credentialProvider: @Sendable (UUID) throws -> S3Credentials
+    @ObservationIgnored
+    private let stsClientFactory: @Sendable (URL, String) -> any STSClientProtocol
+    @ObservationIgnored
+    private let temporaryCredentials: TemporaryCredentialProvider
 
     init(
         clientFactory: @escaping @Sendable (S3ConnectionConfiguration) -> any S3ClientProtocol = {
@@ -75,11 +79,17 @@ final class S3BrowserModel {
         credentialProvider: @escaping @Sendable (UUID) throws -> S3Credentials = {
             try ConnectionCredentialStore.shared.load(for: $0)
         },
+        stsClientFactory: @escaping @Sendable (URL, String) -> any STSClientProtocol = {
+            STSHTTPClient(endpointURL: $0, region: $1)
+        },
+        temporaryCredentials: TemporaryCredentialProvider = .shared,
         previewDirectory: URL = FileManager.default.temporaryDirectory.appendingPathComponent("S4ViewerPreviewCache", isDirectory: true),
         fileManager: FileManager = .default
     ) {
         self.clientFactory = clientFactory
         self.credentialProvider = credentialProvider
+        self.stsClientFactory = stsClientFactory
+        self.temporaryCredentials = temporaryCredentials
         self.previewDirectory = previewDirectory
         self.fileManager = fileManager
     }
@@ -89,7 +99,8 @@ final class S3BrowserModel {
         if DemoMode.isEnabled {
             return S3BrowserModel(
                 clientFactory: { _ in DemoS3Client() },
-                credentialProvider: { _ in DemoMode.credentials }
+                credentialProvider: { _ in DemoMode.credentials },
+                stsClientFactory: { _, _ in DemoSTSClient() }
             )
         }
 #endif
@@ -147,8 +158,8 @@ final class S3BrowserModel {
             if !browsesAllBuckets {
                 currentBucket = nil
             }
-            let client = try makeClient(for: profile)
             isLoading = true
+            let client = try await makeClient(for: profile)
             errorMessage = nil
             if isAtBucketList {
                 knownBuckets = try await client.listBuckets()
@@ -222,7 +233,7 @@ final class S3BrowserModel {
 
         do {
             try ensurePreviewDirectoryExists()
-            let client = try makeClient(for: profile)
+            let client = try await makeClient(for: profile)
             let previewURL = try await client.preparePreview(for: item, in: previewDirectory) { _ in }
             guard requestID == previewRequestID else {
                 try? fileManager.removeItem(at: previewURL)
@@ -274,7 +285,7 @@ final class S3BrowserModel {
             return
         }
         do {
-            let client = try makeClient(for: profile)
+            let client = try await makeClient(for: profile)
             try await client.createFolder(named: folderName, in: currentPrefix)
             await refresh(using: profile)
         } catch {
@@ -291,7 +302,7 @@ final class S3BrowserModel {
         }
 
         do {
-            let client = try makeClient(for: profile)
+            let client = try await makeClient(for: profile)
             let renamedKey = try await client.rename(item: item, to: newName)
             await refresh(using: profile)
             selectedItemKey = renamedKey
@@ -309,7 +320,7 @@ final class S3BrowserModel {
         }
 
         do {
-            let client = try makeClient(for: profile)
+            let client = try await makeClient(for: profile)
             try await client.delete(item: item)
             selectedItemKey = nil
             clearPreview()
@@ -324,7 +335,7 @@ final class S3BrowserModel {
             return
         }
         do {
-            let client = try makeClient(for: profile)
+            let client = try await makeClient(for: profile)
             let prefix = currentPrefix
             let jobs: [(url: URL, transferID: UUID)] = urls.map { url in
                 (url, startTransfer(name: url.lastPathComponent, kind: .upload))
@@ -380,7 +391,7 @@ final class S3BrowserModel {
         }
 
         do {
-            let client = try makeClient(for: profile)
+            let client = try await makeClient(for: profile)
             let transferID = startTransfer(name: item.name, kind: .download)
             do {
                 try await client.download(item: item, to: destinationURL) { progress in
@@ -423,8 +434,22 @@ final class S3BrowserModel {
         previewState = .empty("Select a file to preview.")
     }
 
-    private func makeClient(for profile: ConnectionProfile) throws -> any S3ClientProtocol {
+    private func makeClient(for profile: ConnectionProfile) async throws -> any S3ClientProtocol {
         var configuration = try profile.configuration(credentials: credentialProvider(profile.id))
+        if let assumeRole = configuration.assumeRole {
+            let base = configuration.credentials
+            let sts = stsClientFactory(
+                STSHTTPClient.endpoint(forS3Endpoint: configuration.endpointURL, region: configuration.region),
+                configuration.region
+            )
+            configuration.credentials = try await temporaryCredentials.credentials(
+                for: profile.id,
+                settings: assumeRole,
+                base: base
+            ) {
+                try await sts.assumeRole(assumeRole, using: base)
+            }
+        }
         if let currentBucket {
             configuration = configuration.scoped(to: currentBucket)
         }

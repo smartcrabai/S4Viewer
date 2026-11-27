@@ -1,6 +1,7 @@
 #if DEBUG
 import AppIntents
 import Foundation
+import Synchronization
 
 /// Testing-only App Intents. They drive the live `S3BrowserModel` when the app service shares
 /// the window process, and otherwise use the same fixture-backed model path without XCUITest
@@ -216,6 +217,76 @@ struct BrowseAllBucketsIntent: AppIntent {
         }
 
         return .result(value: [browser.currentLocationTitle] + listing(browser))
+    }
+}
+
+/// Browses the assumed-role demo profile and reports which credentials signed the S3
+/// requests: the access key ID of the STS fixture, whether a session token was attached,
+/// and how many AssumeRole calls two refreshes needed. Only fixture values are returned.
+struct BrowseWithAssumedRoleIntent: AppIntent {
+    static let title: LocalizedStringResource = "Browse With Assumed Role"
+#if !S4VIEWER_INTENT_TESTING
+    static let isDiscoverable = false
+#endif
+    static let openAppWhenRun = false
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<[String]> {
+        let signing = DemoSigningRecorder()
+        let browser = S3BrowserModel(
+            clientFactory: { configuration in
+                signing.record(configuration.credentials)
+                return DemoS3Client()
+            },
+            credentialProvider: { _ in DemoMode.credentials },
+            stsClientFactory: { _, _ in signing.countingSTS() },
+            temporaryCredentials: TemporaryCredentialProvider()
+        )
+        let profile = DemoMode.makeAssumeRoleProfile()
+        await browser.connect(to: profile)
+        try failIfErrored(browser)
+        await browser.refresh(using: profile)
+        try failIfErrored(browser)
+
+        return .result(value: signing.summary + listing(browser))
+    }
+}
+
+nonisolated private final class DemoSigningRecorder: Sendable {
+    private let state = Mutex((accessKeys: [String](), tokens: 0, assumeCalls: 0))
+
+    nonisolated func record(_ credentials: S3Credentials) {
+        state.withLock {
+            $0.accessKeys.append(credentials.accessKeyID)
+            $0.tokens += credentials.sessionToken == nil ? 0 : 1
+        }
+    }
+
+    nonisolated func countingSTS() -> any STSClientProtocol {
+        CountingSTS(recorder: self)
+    }
+
+    nonisolated func countAssume() {
+        state.withLock { $0.assumeCalls += 1 }
+    }
+
+    nonisolated var summary: [String] {
+        state.withLock {
+            [
+                "accessKeys=\(Set($0.accessKeys).sorted().joined(separator: ","))",
+                "signedWithToken=\($0.tokens)/\($0.accessKeys.count)",
+                "assumeRoleCalls=\($0.assumeCalls)",
+            ]
+        }
+    }
+
+    private struct CountingSTS: STSClientProtocol {
+        let recorder: DemoSigningRecorder
+
+        func assumeRole(_ settings: AssumeRoleSettings, using credentials: S3Credentials) async throws -> TemporaryCredentials {
+            recorder.countAssume()
+            return try await DemoSTSClient().assumeRole(settings, using: credentials)
+        }
     }
 }
 

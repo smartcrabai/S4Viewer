@@ -18,6 +18,9 @@ struct ConnectionProfileEditorView: View {
         case bucket
         case accessKey
         case secretKey
+        case sessionToken
+        case roleARN
+        case externalID
     }
 
     init(
@@ -55,6 +58,15 @@ struct ConnectionProfileEditorView: View {
                 SecureField("Secret key", text: $draft.secretKey)
                     .focused($focusedField, equals: .secretKey)
                     .accessibilityIdentifier(A11y.ProfileEditor.secretKey)
+                SecureField("Session token (optional)", text: $draft.sessionToken)
+                    .focused($focusedField, equals: .sessionToken)
+                    .accessibilityIdentifier(A11y.ProfileEditor.sessionToken)
+                TextField("Role ARN to assume (optional)", text: $draft.roleARN)
+                    .focused($focusedField, equals: .roleARN)
+                    .accessibilityIdentifier(A11y.ProfileEditor.roleARN)
+                TextField("External ID (optional)", text: $draft.externalID)
+                    .focused($focusedField, equals: .externalID)
+                    .accessibilityIdentifier(A11y.ProfileEditor.externalID)
                 Toggle("Use path-style requests", isOn: $draft.usePathStyle)
             }
             .formStyle(.grouped)
@@ -79,7 +91,7 @@ struct ConnectionProfileEditorView: View {
             }
         }
         .padding(20)
-        .frame(minWidth: 460, minHeight: 360)
+        .frame(minWidth: 460, minHeight: 480)
         .onAppear {
             focusedField = .name
         }
