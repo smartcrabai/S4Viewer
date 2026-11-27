@@ -4,7 +4,6 @@ nonisolated enum ConnectionProfileValidationError: LocalizedError, Equatable {
     case missingName
     case invalidEndpoint
     case missingRegion
-    case missingBucket
     case missingAccessKey
     case missingSecretKey
 
@@ -16,8 +15,6 @@ nonisolated enum ConnectionProfileValidationError: LocalizedError, Equatable {
             return "Enter a valid endpoint URL."
         case .missingRegion:
             return "Enter a region."
-        case .missingBucket:
-            return "Enter a bucket name."
         case .missingAccessKey:
             return "Enter an access key."
         case .missingSecretKey:
@@ -112,10 +109,8 @@ nonisolated struct ConnectionProfileDraft: Equatable, Sendable {
             throw ConnectionProfileValidationError.missingRegion
         }
 
+        // Empty means "every bucket the credentials can list".
         let normalizedBucket = bucket.trimmed()
-        guard !normalizedBucket.isEmpty else {
-            throw ConnectionProfileValidationError.missingBucket
-        }
 
         let normalizedAccessKey = accessKey.trimmed()
         guard !normalizedAccessKey.isEmpty else {

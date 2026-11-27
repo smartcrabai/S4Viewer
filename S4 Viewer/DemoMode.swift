@@ -32,6 +32,24 @@ nonisolated enum DemoMode {
         )
     }
 
+    /// `ListBuckets` fixture. Every demo bucket serves the same `DemoBucket` contents.
+    static let buckets = [
+        S3Bucket(name: "smartcrab-archive", region: "us-west-2", createdAt: Date(timeIntervalSince1970: 1_767_225_600)),
+        S3Bucket(name: "smartcrab-logs", region: "us-east-1", createdAt: Date(timeIntervalSince1970: 1_769_904_000)),
+        S3Bucket(name: "smartcrab-media", region: "us-east-1", createdAt: Date(timeIntervalSince1970: 1_772_323_200)),
+    ]
+
+    /// A profile with no bucket, so the browser root is the bucket list.
+    static func makeAllBucketsProfile() -> ConnectionProfile {
+        ConnectionProfile(
+            name: "All Buckets",
+            endpoint: "https://s3.us-east-1.amazonaws.com",
+            region: "us-east-1",
+            bucket: "",
+            usePathStyle: false
+        )
+    }
+
     @MainActor
     static func makeContainer(schema: Schema) throws -> ModelContainer {
         let configuration = ModelConfiguration(
@@ -240,6 +258,8 @@ actor DemoBucket {
             }
             objects[newKey] = stored
             return newKey
+        case .bucket:
+            throw DemoS3Error.notFound(item.key)
         case .folder:
             let normalized = try validateSinglePathComponent(newName)
             let newKey = parent + normalized + "/"
@@ -263,6 +283,8 @@ actor DemoBucket {
             guard objects.removeValue(forKey: item.key) != nil else {
                 throw DemoS3Error.notFound(item.key)
             }
+        case .bucket:
+            throw DemoS3Error.notFound(item.key)
         case .folder:
             guard folders.remove(item.key) != nil else {
                 throw DemoS3Error.notFound(item.key)
@@ -309,6 +331,10 @@ nonisolated final class DemoS3Client: S3ClientProtocol {
 
     init(bucket: DemoBucket = .shared) {
         self.bucket = bucket
+    }
+
+    func listBuckets() async throws -> [S3Bucket] {
+        DemoMode.buckets
     }
 
     func list(prefix: String) async throws -> S3ListObjectsPage {

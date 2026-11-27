@@ -2,11 +2,14 @@ import Foundation
 
 nonisolated struct S3BrowserItem: Identifiable, Hashable, Sendable {
     enum Kind: String, CaseIterable, Sendable {
+        case bucket
         case folder
         case object
 
         var label: String {
             switch self {
+            case .bucket:
+                return "Bucket"
             case .folder:
                 return "Folder"
             case .object:
@@ -16,6 +19,8 @@ nonisolated struct S3BrowserItem: Identifiable, Hashable, Sendable {
 
         var systemImageName: String {
             switch self {
+            case .bucket:
+                return "externaldrive"
             case .folder:
                 return "folder"
             case .object:
@@ -41,6 +46,18 @@ nonisolated struct S3BrowserItem: Identifiable, Hashable, Sendable {
             kind: .folder,
             size: nil,
             modifiedAt: nil,
+            eTag: nil,
+            contentType: nil
+        )
+    }
+
+    static func bucket(_ bucket: S3Bucket) -> S3BrowserItem {
+        S3BrowserItem(
+            key: bucket.name,
+            name: bucket.name,
+            kind: .bucket,
+            size: nil,
+            modifiedAt: bucket.createdAt,
             eTag: nil,
             contentType: nil
         )

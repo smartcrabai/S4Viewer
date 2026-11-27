@@ -27,6 +27,24 @@ struct ConnectionProfileDraftTests {
     }
 
     @Test
+    func emptyBucketValidatesAsAllBuckets() throws {
+        let draft = ConnectionProfileDraft(
+            name: "Work",
+            endpoint: "https://s3.example.com",
+            region: "us-east-1",
+            bucket: "   ",
+            accessKey: "ACCESS",
+            secretKey: "SECRET",
+            usePathStyle: true
+        )
+
+        let validated = try draft.validated()
+
+        #expect(validated.bucket.isEmpty)
+        #expect(validated.configuration.bucket.isEmpty)
+    }
+
+    @Test
     func validatedDraftRejectsInvalidEndpoint() {
         let draft = ConnectionProfileDraft(
             name: "Work",

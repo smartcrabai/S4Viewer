@@ -34,6 +34,8 @@ Not covered by any automated test, because no fixture can stand in for them:
 
 - [ ] Upload a file larger than 8 MiB (exercises the multipart path)
 - [ ] Upload several files at once (three run in parallel) at real throughput
+- [ ] Leave the bucket empty on an AWS profile; confirm every bucket is listed and
+      that a bucket in another region opens (`BucketRegion` redirects the request)
 - [ ] Quit and relaunch; confirm the profile still connects, which proves the
       credentials were read back from the Keychain
 - [ ] Delete the profile; confirm its Keychain item is gone (Keychain Access,

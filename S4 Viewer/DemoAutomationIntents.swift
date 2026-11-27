@@ -179,6 +179,46 @@ struct CurrentLocationIntent: AppIntent {
     }
 }
 
+/// Browses a profile that leaves the bucket empty. It uses its own model so the window's
+/// fixed-bucket profile, which every other intent drives, keeps its state. Returns the
+/// location title followed by the listing, so a test sees where the model ended up.
+struct BrowseAllBucketsIntent: AppIntent {
+    static let title: LocalizedStringResource = "Browse All Buckets"
+#if !S4VIEWER_INTENT_TESTING
+    static let isDiscoverable = false
+#endif
+    static let openAppWhenRun = false
+
+    @Parameter(title: "Bucket") var bucket: String?
+    @Parameter(title: "Prefix") var prefix: String?
+    @Parameter(title: "Navigate Up") var navigateUp: Bool?
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<[String]> {
+        let browser = S3BrowserModel.makeDefault()
+        let profile = DemoMode.makeAllBucketsProfile()
+        await browser.connect(to: profile)
+        try failIfErrored(browser)
+
+        if let bucket, !bucket.isEmpty {
+            await browser.openFolder(withKey: bucket, using: profile)
+            try failIfErrored(browser)
+            var current = ""
+            for component in (prefix ?? "").split(separator: "/") {
+                current += component + "/"
+                await browser.openFolder(withKey: current, using: profile)
+                try failIfErrored(browser)
+            }
+        }
+        if navigateUp == true {
+            await browser.navigateUp(using: profile)
+            try failIfErrored(browser)
+        }
+
+        return .result(value: [browser.currentLocationTitle] + listing(browser))
+    }
+}
+
 // MARK: - Editing
 
 struct CreateFolderIntent: AppIntent {

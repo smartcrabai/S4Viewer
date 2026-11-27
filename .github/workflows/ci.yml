@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    # Public repo: GitHub-hosted macOS, never the org's self-hosted runners.
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Select Xcode 26
+        run: |
+          DEVELOPER_APP="$(ls -d /Applications/Xcode_26*.app | sort -V | tail -n1)"
+          sudo xcode-select -s "$DEVELOPER_APP"
+          xcodebuild -version
+
+      - name: Run unit tests
+        run: |
+          xcodebuild test \
+            -project "S4 Viewer.xcodeproj" \
+            -scheme "S4 Viewer" \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO

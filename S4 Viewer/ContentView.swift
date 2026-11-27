@@ -387,7 +387,7 @@ private struct ConnectionSidebarRow: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(profile.name)
                 .font(.headline)
-            Text("\(profile.bucket) / \(profile.region)")
+            Text("\(profile.bucket.isEmpty ? "All buckets" : profile.bucket) / \(profile.region)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -449,9 +449,13 @@ private struct BrowserColumnView: View {
                             .accessibilityIdentifier(A11y.Browser.emptyMatches)
                         } else {
                             ContentUnavailableView(
-                                "No Objects",
+                                browser.isAtBucketList ? "No Buckets" : "No Objects",
                                 systemImage: "tray",
-                                description: Text("Upload files or create folders in the current location.")
+                                description: Text(
+                                    browser.isAtBucketList
+                                        ? "These credentials cannot see any bucket."
+                                        : "Upload files or create folders in the current location."
+                                )
                             )
                             .accessibilityIdentifier(A11y.Browser.emptyObjects)
                         }
@@ -515,7 +519,7 @@ private struct BrowserActionBar: View {
                         identifier: A11y.Browser.open,
                         action: onOpen
                     )
-                    .disabled(selectedItem?.kind != .folder)
+                    .disabled(selectedItem == nil || selectedItem?.kind == .object)
                     IconToolbarButton(
                         title: "Up",
                         systemImage: "arrow.up",
@@ -530,6 +534,7 @@ private struct BrowserActionBar: View {
                         identifier: A11y.Browser.upload,
                         action: onUpload
                     )
+                    .disabled(browser.isAtBucketList)
                     IconToolbarButton(
                         title: "Download",
                         systemImage: "square.and.arrow.down",
@@ -543,20 +548,21 @@ private struct BrowserActionBar: View {
                         identifier: A11y.Browser.newFolder,
                         action: onCreateFolder
                     )
+                    .disabled(browser.isAtBucketList)
                     IconToolbarButton(
                         title: "Rename",
                         systemImage: "pencil",
                         identifier: A11y.Browser.rename,
                         action: onRename
                     )
-                    .disabled(selectedItem == nil)
+                    .disabled(selectedItem == nil || browser.isAtBucketList)
                     IconToolbarButton(
                         title: "Delete",
                         systemImage: "trash",
                         identifier: A11y.Browser.delete,
                         action: onDelete
                     )
-                    .disabled(selectedItem == nil)
+                    .disabled(selectedItem == nil || browser.isAtBucketList)
                 }
                 .fixedSize()
                 Spacer(minLength: 8)
@@ -611,7 +617,7 @@ private struct BrowserTableView: View {
         guard
             let key = selection.first,
             let item = browser.items.first(where: { $0.key == key }),
-            item.kind == .folder
+            item.kind != .object
         else {
             return
         }
