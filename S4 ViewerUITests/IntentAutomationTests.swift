@@ -192,6 +192,17 @@ final class IntentAutomationTests: XCTestCase {
         XCTAssertEqual(backToList, ["/", "smartcrab-archive", "smartcrab-logs", "smartcrab-media"])
     }
 
+    func testAssumedRoleSignsWithTemporaryCredentialsFromOneAssumeRole() async throws {
+        let result: [String] = try await definitions.intents["BrowseWithAssumedRoleIntent"].makeIntent().run().value
+
+        XCTAssertEqual(Array(result.prefix(3)), [
+            "accessKeys=ASIADEMOTEMPORARY",
+            "signedWithToken=2/2",
+            "assumeRoleCalls=1",
+        ])
+        XCTAssertEqual(Array(result.dropFirst(3)), Self.fixtureRoot)
+    }
+
     /// Asserts what the intent-test build guarantees structurally: the host scene is a
     /// windowless `Settings { EmptyView() }`, so launching it never puts a window on screen.
     /// (The `.prohibited` activation policy is set in code and cannot be observed from here;

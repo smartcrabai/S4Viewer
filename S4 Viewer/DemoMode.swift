@@ -50,6 +50,19 @@ nonisolated enum DemoMode {
         )
     }
 
+    /// A profile that assumes a role, so `DemoSTSClient` hands out the signing credentials.
+    static func makeAssumeRoleProfile() -> ConnectionProfile {
+        ConnectionProfile(
+            name: "Assumed Role",
+            endpoint: "https://s3.us-east-1.amazonaws.com",
+            region: "us-east-1",
+            bucket: "smartcrab-media",
+            usePathStyle: false,
+            roleARN: "arn:aws:iam::123456789012:role/S4ViewerDemoReader",
+            externalID: "demo-external-id"
+        )
+    }
+
     @MainActor
     static func makeContainer(schema: Schema) throws -> ModelContainer {
         let configuration = ModelConfiguration(
@@ -391,6 +404,22 @@ nonisolated final class DemoS3Client: S3ClientProtocol {
             try await Task.sleep(for: .milliseconds(120))
             progress(Double(step) / 5)
         }
+    }
+}
+
+/// Stand-in for STS. The returned keys are fixtures, never real credentials.
+nonisolated struct DemoSTSClient: STSClientProtocol {
+    static let temporaryAccessKeyID = "ASIADEMOTEMPORARY"
+
+    func assumeRole(_ settings: AssumeRoleSettings, using credentials: S3Credentials) async throws -> TemporaryCredentials {
+        TemporaryCredentials(
+            credentials: S3Credentials(
+                accessKeyID: Self.temporaryAccessKeyID,
+                secretAccessKey: "DEMOTEMPORARYSECRET",
+                sessionToken: "DEMOSESSIONTOKEN"
+            ),
+            expiration: .now.addingTimeInterval(3_600)
+        )
     }
 }
 #endif

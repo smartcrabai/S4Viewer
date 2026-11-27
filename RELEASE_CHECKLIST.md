@@ -36,6 +36,8 @@ Not covered by any automated test, because no fixture can stand in for them:
 - [ ] Upload several files at once (three run in parallel) at real throughput
 - [ ] Leave the bucket empty on an AWS profile; confirm every bucket is listed and
       that a bucket in another region opens (`BucketRegion` redirects the request)
+- [ ] Assume a real role (with and without an external ID) and browse; confirm a
+      session-token profile works and that an expired token reports the S3 error
 - [ ] Quit and relaunch; confirm the profile still connects, which proves the
       credentials were read back from the Keychain
 - [ ] Delete the profile; confirm its Keychain item is gone (Keychain Access,
